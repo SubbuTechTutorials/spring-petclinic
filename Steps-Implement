@@ -1,0 +1,218 @@
+=====================================================================
+			STEPS FOR PROJECT IMPLEMENTATION
+=====================================================================
+Step-1: 
+git clone https://github.com/Subbu2025/spring-petclinic.git
+cd spring-petclinic.git
+vi Dockerfile
+============================================================================
+# Use a Maven image with JDK 17 for the build stage
+FROM maven:3.9.4-eclipse-temurin-17-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY . .
+RUN mvn clean package -DskipTests
+
+# Use JDK 17 for the runtime stage
+FROM eclipse-temurin:17-jdk-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app/target/spring-petclinic-*.jar /app/app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+============================================================================
+Step-2: 
+Build a Docker Image for our spring-petclinic-app:
+docker build -t subbu7677/spring-petclinic-app:1.0.0 .
+
+Create a Network:
+docker network create app-db-network
+docker network inspect app-db-network
+
+Create and Run MySQL-DB Container with that network:
+docker run -d --name mysql-db --network app-db-network -e MYSQL_USER=petclinic -e MYSQL_PASSWORD=petclinic -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=petclinic -p 3306:3306 mysql:8.4
+
+Now Create and Run spring-petclinic-app Container with that network along with mysql-db environment variables:
+---------------------------------------------------
+docker run -d --name spring-petclinic-app \
+  -e MYSQL_URL=jdbc:mysql://mysql-db:3306/petclinic \
+  -e MYSQL_USER=petclinic \
+  -e MYSQL_PASS=petclinic \
+  --network app-db-network \
+  -p 8080:8080 \
+  subbu7677/spring-petclinic-app:1.0.0
+
+Note: Open Port:8080 in your EC2-Server Security Group Inbound Rule
+================================================================================
+Step-4: To import your project database tables into the mysql-db container, you can follow these steps:
+=> Prepare Your SQL Dump File:
+Make sure you have a SQL dump file (e.g., database.sql) that contains the structure and data for your database tables.
+=>Copy the SQL File to the MySQL Container:
+ubuntu@ip-172-31-3-245:~/spring-petclinic/src/main/resources/db/mysql$ ls 
+data.sql  petclinic_db_setup_mysql.txt  schema.sql  user.sql
+=> Copy the schema.sql file to the MySQL container:
+docker cp /home/ubuntu/spring-petclinic/src/main/resources/db/mysql/schema.sql mysql-db:/schema.sql
+docker cp /home/ubuntu/spring-petclinic/src/main/resources/db/mysql/. mysql-db:/docker-entrypoint-initdb.d/
+docker cp /home/ubuntu/spring-petclinic/src/main/resources/db/mysql/data.sql mysql-db:/data.sql
+docker cp /home/ubuntu/spring-petclinic/src/main/resources/db/mysql/user.sql mysql-db:/user.sql
+docker cp /home/ubuntu/spring-petclinic/src/main/resources/db/mysql/user.sql mysql-db:/user.sql
+Output:
+----------------------------------------------------
+schema.sql mysql-db:/schema.sql
+Successfully copied 3.58kB to mysql-db:/schema.sql
+----------------------------------------------------
+=> Import the schema.sql file into the petclinic database:
+Once the file is copied, run the following command to import the schema into MySQL:
+Check is it copied or not successfully: docker exec -it mysql-db ls /
+output ex:
+------------------------------------------------------
+ubuntu@ip-172-31-3-245:~/spring-petclinic/src/main/resources/db/mysql$ docker exec -it mysql-db ls /
+afs  boot  docker-entrypoint-initdb.d  home  lib64  mnt  proc  run   schema.sql  sys  usr
+bin  dev   etc                         lib   media  opt  root  sbin  srv         tmp  var
+-------------------------------------------------------
+=> docker exec -it mysql-db /bin/bash
+mysql -u petclinic -p petclinic < /schema.sql
+mysql -u petclinic -p petclinic < /data.sql
+-------------------------------------------------------
+bash-5.1# mysql -u root -p
+mysql> CREATE USER 'subbu'@'%' IDENTIFIED BY 'db@12345';
+Query OK, 0 rows affected (0.01 sec)
+mysql> GRANT ALL PRIVILEGES ON petclinic.* TO 'subbu'@'%';
+Query OK, 0 rows affected (0.01 sec)
+mysql> FLUSH PRIVILEGES;
+Query OK, 0 rows affected (0.00 sec)
+=========================================================================
+bash-5.1# mysql -u subbu -p
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| performance_schema |
+| petclinic          |
++--------------------+
+3 rows in set (0.01 sec)
+mysql> USE petclinic;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+
+mysql> SHOW TABLES;
++---------------------+
+| Tables_in_petclinic |
++---------------------+
+| owners              |
+| pets                |
+| specialties         |
+| types               |
+| vet_specialties     |
+| vets                |
+| visits              |
++---------------------+
+7 rows in set (0.00 sec)
+
+mysql> SELECT * FROM owners;
++----+------------+-----------+-----------------------+-------------+------------+
+| id | first_name | last_name | address               | city        | telephone  |
++----+------------+-----------+-----------------------+-------------+------------+
+|  1 | George     | Franklin  | 110 W. Liberty St.    | Madison     | 6085551023 |
+|  2 | Betty      | Davis     | 638 Cardinal Ave.     | Sun Prairie | 6085551749 |
+|  3 | Eduardo    | Rodriquez | 2693 Commerce St.     | McFarland   | 6085558763 |
+|  4 | Harold     | Davis     | 563 Friendly St.      | Windsor     | 6085553198 |
+|  5 | Peter      | McTavish  | 2387 S. Fair Way      | Madison     | 6085552765 |
+|  6 | Jean       | Coleman   | 105 N. Lake St.       | Monona      | 6085552654 |
+|  7 | Jeff       | Black     | 1450 Oak Blvd.        | Monona      | 6085555387 |
+|  8 | Maria      | Escobito  | 345 Maple St.         | Madison     | 6085557683 |
+|  9 | David      | Schroeder | 2749 Blackhawk Trail  | Madison     | 6085559435 |
+| 10 | Carlos     | Estaban   | 2335 Independence La. | Waunakee    | 6085555487 |
+| 11 | SUBBAREDDY | SANGHAM   | 1-2-3                 | ABC         | 1234567890 |
++----+------------+-----------+-----------------------+-------------+------------+
+11 rows in set (0.00 sec)
+
+===================================================================================
+Pushing Docker Images to Dockerhub:
+------------------------
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ docker images
+REPOSITORY                       TAG       IMAGE ID       CREATED          SIZE
+subbu7677/spring-petclinic-app   1.0.0     bbcfff616fea   54 minutes ago   376MB
+mysql                            8.4       f742bd39cd6b   2 months ago     584MB
+-------------------------------------
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ docker tag mysql:8.4 subbu7677/mysql:8.4
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ docker images
+REPOSITORY                       TAG       IMAGE ID       CREATED             SIZE
+subbu7677/spring-petclinic-app   1.0.0     bbcfff616fea   About an hour ago   376MB
+mysql                            8.4       f742bd39cd6b   2 months ago        584MB
+subbu7677/mysql                  8.4       f742bd39cd6b   2 months ago        584MB
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ 
+-------------------------------------
+3. Push the images:
+Now push the images to Docker Hub:
+Push your spring-petclinic-app image:
+docker push subbu7677/spring-petclinic-app:1.0.0
+--------------------------------------
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ docker push subbu7677/spring-petclinic-app:1.0.0
+The push refers to repository [docker.io/subbu7677/spring-petclinic-app]
+f7efabcc9a12: Pushed 
+4996fc293a83: Pushed 
+a8a5d72c52b0: Mounted from library/eclipse-temurin 
+b480ad7bdbcc: Mounted from library/eclipse-temurin 
+25cc22fd22a0: Mounted from library/eclipse-temurin 
+e29c7d3c6568: Mounted from library/eclipse-temurin 
+63ca1fbb43ae: Mounted from library/eclipse-temurin 
+1.0.0: digest: sha256:e5f0151b89eeca7e6f72c32fceaca8358ece2725410567c526c1870c90d5003f size: 1786
+--------------------------------------
+Push your mysql image (if you want to push it):
+docker push subbu7677/mysql:8.4
+-------------------------------------
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ docker push subbu7677/mysql:8.4
+The push refers to repository [docker.io/subbu7677/mysql]
+3ae253e7d3a3: Mounted from library/mysql 
+e1f967bd5a7d: Mounted from library/mysql 
+912958c342e1: Mounted from library/mysql 
+22a17ef1ea0c: Mounted from library/mysql 
+3af6d69d4054: Mounted from library/mysql 
+6d5141647b7c: Mounted from library/mysql 
+a7226d7d17a4: Mounted from library/mysql 
+eb038111c453: Mounted from library/mysql 
+4aaf28c8ff69: Mounted from library/mysql 
+664144bd1f24: Mounted from library/mysql 
+8.4: digest: sha256:cf9e6fd141cbc5d3f15ac3d5cfc95eef563a5bdbc0f2c7654fa2b32de489d209 size: 2411
+ubuntu@ip-172-31-3-245:~/spring-petclinic$ 
+===================================================================================
+
+===================================
+ Remove it from pom.xml file:
+ <!-- Databases - Uses H2 by default -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+========================================
+application.proerties:
+# database init, supports mysql too
+database=h2
+spring.sql.init.schema-locations=classpath*:db/${database}/schema.sql
+spring.sql.init.data-locations=classpath*:db/${database}/data.sql
+
+# Web
+spring.thymeleaf.mode=HTML
+
+# JPA
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.open-in-view=true
+
+# Internationalization
+spring.messages.basename=messages/messages
+
+# Actuator
+management.endpoints.web.exposure.include=*
+
+# Logging
+logging.level.org.springframework=INFO
+# logging.level.org.springframework.web=DEBUG
+# logging.level.org.springframework.context.annotation=TRACE
+
+# Maximum time static resources should be cached
+spring.web.resources.cache.cachecontrol.max-age=12h
+============================================================
