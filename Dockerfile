@@ -10,11 +10,6 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jdk-alpine AS runtime
 WORKDIR /app
 
-# Set environment variables for MySQL root credentials
-ENV MYSQL_URL=jdbc:mysql://mysql-service:3306/petclinic
-ENV MYSQL_USER=root
-ENV MYSQL_ROOT_PASSWORD=root
-
 # Copy the built JAR from the build stage
 COPY --from=build /app/target/spring-petclinic-*.jar /app/app.jar
 
