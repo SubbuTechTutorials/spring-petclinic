@@ -177,24 +177,27 @@
 
       <!-- JaCoCo Plugin for Code Coverage -->
       <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-        <version>${jacoco.version}</version>
-        <executions>
-          <execution>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>0.8.12</version>
+    <executions>
+        <execution>
             <goals>
-              <goal>prepare-agent</goal>
+                <goal>prepare-agent</goal>
             </goals>
-          </execution>
-          <execution>
+            <configuration>
+                <destFile>${project.build.directory}/jacoco.exec</destFile>
+            </configuration>
+        </execution>
+        <execution>
             <id>report</id>
             <goals>
-              <goal>report</goal>
+                <goal>report</goal>
             </goals>
             <phase>test</phase>
-          </execution>
-        </executions>
-      </plugin>
+        </execution>
+    </executions>
+   </plugin>
 
       <!-- SonarQube Plugin for Code Analysis -->
       <plugin>
