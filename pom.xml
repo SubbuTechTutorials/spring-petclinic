@@ -79,7 +79,13 @@
       <artifactId>mysql</artifactId>
       <scope>test</scope>
     </dependency>
-
+    <!-- Explicitly adding spring-webmvc dependency to fix the vulnerability -->
+    <!-- This is the fixed version, which should mitigate the vulnerability CVE-2024-38816 -->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-webmvc</artifactId>
+        <version>6.1.13</version> <!-- Updated version to mitigate the vulnerability -->
+    </dependency>
     <!-- Additional dependencies as in your original pom.xml -->
     <!-- Caching -->
     <dependency>
