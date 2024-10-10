@@ -176,28 +176,36 @@
       </plugin>
 
       <!-- JaCoCo Plugin for Code Coverage -->
-      <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-        <version>${jacoco.version}</version>
-        <executions>
-          <execution>
+  <plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>${jacoco.version}</version>
+    <executions>
+        <execution>
+            <id>prepare-agent</id>
             <goals>
-              <goal>prepare-agent</goal> <!-- Ensure agent is attached -->
-            </goals>
-          </execution>
-          <execution>
-            <id>report</id>
-            <goals>
-              <goal>report</goal>
+                <goal>prepare-agent</goal>
             </goals>
             <phase>test</phase>
-          </execution>
-        </executions>
-        <configuration>
-          <destFile>${project.build.directory}/jacoco.exec</destFile> <!-- Save .exec file -->
-        </configuration>
-      </plugin>
+            <configuration>
+                <destFile>${project.build.directory}/jacoco.exec</destFile>
+                <append>true</append>
+            </configuration>
+        </execution>
+        <execution>
+            <id>report</id>
+            <goals>
+                <goal>report</goal>
+            </goals>
+            <phase>verify</phase>
+            <configuration>
+                <dataFile>${project.build.directory}/jacoco.exec</dataFile>
+                <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+
 
       <!-- SonarQube Plugin for Code Analysis -->
       <plugin>
