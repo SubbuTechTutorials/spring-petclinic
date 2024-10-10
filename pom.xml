@@ -177,27 +177,27 @@
 
       <!-- JaCoCo Plugin for Code Coverage -->
       <plugin>
-    <groupId>org.jacoco</groupId>
-    <artifactId>jacoco-maven-plugin</artifactId>
-    <version>0.8.12</version>
-    <executions>
-        <execution>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
             <goals>
-                <goal>prepare-agent</goal>
+              <goal>prepare-agent</goal> <!-- Ensure agent is attached -->
             </goals>
-            <configuration>
-                <destFile>${project.build.directory}/jacoco.exec</destFile>
-            </configuration>
-        </execution>
-        <execution>
+          </execution>
+          <execution>
             <id>report</id>
             <goals>
-                <goal>report</goal>
+              <goal>report</goal>
             </goals>
             <phase>test</phase>
-        </execution>
-    </executions>
-   </plugin>
+          </execution>
+        </executions>
+        <configuration>
+          <destFile>${project.build.directory}/jacoco.exec</destFile> <!-- Save .exec file -->
+        </configuration>
+      </plugin>
 
       <!-- SonarQube Plugin for Code Analysis -->
       <plugin>
@@ -213,8 +213,9 @@
         <version>3.0.0-M5</version>
         <configuration>
           <includes>
-            <include>**/*Test.java</include>
+            <include>**/*Test.java</include>  <!-- Include all Test cases -->
           </includes>
+          <argLine>${argLine} -javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
         </configuration>
       </plugin>
     </plugins>
