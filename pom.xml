@@ -7,22 +7,23 @@
   <artifactId>spring-petclinic</artifactId>
   <version>3.3.0-SNAPSHOT</version>
 
+  <!-- Parent for Spring Boot -->
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
     <version>3.3.3</version> <!-- Keep Spring Boot at 3.x -->
     <relativePath/>
   </parent>
-  
+
   <name>petclinic</name>
 
   <properties>
-    <java.version>17</java.version>
+    <java.version>17</java.version> <!-- Using Java 17 -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <project.build.outputTimestamp>2023-05-10T07:42:50Z</project.build.outputTimestamp>
 
-    <!-- Dependency versions -->
+    <!-- Version Properties -->
     <webjars-bootstrap.version>5.3.3</webjars-bootstrap.version>
     <webjars-font-awesome.version>4.7.0</webjars-font-awesome.version>
     <checkstyle.version>10.16.0</checkstyle.version>
@@ -31,7 +32,6 @@
     <maven-checkstyle.version>3.3.1</maven-checkstyle.version>
     <nohttp-checkstyle.version>0.0.11</nohttp-checkstyle.version>
     <spring-format.version>0.0.41</spring-format.version>
-    <!-- Remove Hibernate version as it's managed by Spring Boot -->
   </properties>
 
   <dependencies>
@@ -73,21 +73,26 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- Testcontainers for MySQL -->
+    <!-- Testcontainers for MySQL Integration -->
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>mysql</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- Explicitly adding spring-webmvc dependency to fix the vulnerability -->
-    <!-- This is the fixed version, which should mitigate the vulnerability CVE-2024-38816 -->
     <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-webmvc</artifactId>
-        <version>6.1.13</version> <!-- Updated version to mitigate the vulnerability -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId> <!-- Testcontainers integration with Spring Boot -->
+      <scope>test</scope>
     </dependency>
-    <!-- Additional dependencies as in your original pom.xml -->
-    <!-- Caching -->
+
+    <!-- Security update: Fixed vulnerability for spring-webmvc -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-webmvc</artifactId>
+      <version>6.1.13</version> <!-- This mitigates CVE-2024-38816 -->
+    </dependency>
+
+    <!-- Caching Libraries -->
     <dependency>
       <groupId>javax.cache</groupId>
       <artifactId>cache-api</artifactId>
@@ -109,36 +114,34 @@
       <version>${webjars-font-awesome.version}</version>
     </dependency>
 
-    <!-- Testing Tools -->
+    <!-- Testcontainers JUnit 5 Integration -->
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- JAXB dependencies -->
+
+    <!-- JAXB Dependencies (for XML processing) -->
     <dependency>
-        <groupId>jakarta.xml.bind</groupId>
-        <artifactId>jakarta.xml.bind-api</artifactId>
-        <version>3.0.1</version> <!-- Use a stable version -->
+      <groupId>jakarta.xml.bind</groupId>
+      <artifactId>jakarta.xml.bind-api</artifactId>
+      <version>3.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jaxb</groupId>
+      <artifactId>jaxb-runtime</artifactId>
+      <version>3.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.sun.xml.bind</groupId>
+      <artifactId>jaxb-core</artifactId>
+      <version>3.0.1</version>
     </dependency>
 
     <dependency>
-        <groupId>org.glassfish.jaxb</groupId>
-        <artifactId>jaxb-runtime</artifactId>
-        <version>3.0.1</version>
-    </dependency>
-
-    <dependency>
-        <groupId>com.sun.xml.bind</groupId>
-        <artifactId>jaxb-core</artifactId>
-        <version>3.0.1</version>
-    </dependency>
-    
-    <!-- Ensure that your Java EE dependencies are properly resolved -->
-    <dependency>
-        <groupId>jakarta.activation</groupId>
-        <artifactId>jakarta.activation-api</artifactId>
-        <version>2.0.1</version>
+      <groupId>jakarta.activation</groupId>
+      <artifactId>jakarta.activation-api</artifactId>
+      <version>2.0.1</version>
     </dependency>
   </dependencies>
 
@@ -148,69 +151,69 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
-        <!-- Docker Plugin -->
-        <plugin>
-            <groupId>com.spotify</groupId>
-            <artifactId>dockerfile-maven-plugin</artifactId>
-            <version>1.4.13</version>
-            <executions>
-                <execution>
-                    <id>default</id>
-                    <goals>
-                        <goal>build</goal>
-                        <goal>push</goal>
-                    </goals>
-                </execution>
-            </executions>
-            <configuration>
-                <repository>${docker.image.prefix}/${project.artifactId}</repository>
-                <tag>${project.version}</tag>
-                <buildArgs>
-                    <JAR_FILE>target/${project.build.finalName}.jar</JAR_FILE>
-                </buildArgs>
-            </configuration>
-        </plugin>
 
-        <!-- JaCoCo Plugin -->
-        <plugin>
-            <groupId>org.jacoco</groupId>
-            <artifactId>jacoco-maven-plugin</artifactId>
-            <version>${jacoco.version}</version>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>prepare-agent</goal>
-                    </goals>
-                </execution>
-                <execution>
-                    <id>report</id>
-                    <goals>
-                        <goal>report</goal>
-                    </goals>
-                    <phase>test</phase>
-                </execution>
-            </executions>
-        </plugin>
+      <!-- Docker Plugin (You may want to consider Jib if Spotify is deprecated) -->
+      <plugin>
+        <groupId>com.spotify</groupId>
+        <artifactId>dockerfile-maven-plugin</artifactId>
+        <version>1.4.13</version>
+        <executions>
+          <execution>
+            <id>default</id>
+            <goals>
+              <goal>build</goal>
+              <goal>push</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <repository>${docker.image.prefix}/${project.artifactId}</repository>
+          <tag>${project.version}</tag>
+          <buildArgs>
+            <JAR_FILE>target/${project.build.finalName}.jar</JAR_FILE>
+          </buildArgs>
+        </configuration>
+      </plugin>
 
-        <!-- SonarQube Plugin -->
-        <plugin>
-            <groupId>org.sonarsource.scanner.maven</groupId>
-            <artifactId>sonar-maven-plugin</artifactId>
-            <version>3.9.1.2184</version>
-        </plugin>
+      <!-- JaCoCo Plugin for Code Coverage -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <phase>test</phase>
+          </execution>
+        </executions>
+      </plugin>
 
-        <!-- Surefire Plugin -->
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <version>3.0.0-M5</version>
-            <configuration>
-                <includes>
-                    <include>**/*Test.java</include>
-                </includes>
-            </configuration>
-        </plugin>
-      <!-- Other plugins as per original pom.xml -->
+      <!-- SonarQube Plugin for Code Analysis -->
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.9.1.2184</version>
+      </plugin>
+
+      <!-- Surefire Plugin for Unit Testing -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.0.0-M5</version>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+          </includes>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -332,32 +335,6 @@
                         <versionRange>[1,)</versionRange>
                         <goals>
                           <goal>check</goal>
-                        </goals>
-                      </pluginExecutionFilter>
-                      <action>
-                        <ignore />
-                      </action>
-                    </pluginExecution>
-                    <pluginExecution>
-                      <pluginExecutionFilter>
-                        <groupId>org.springframework.boot</groupId>
-                        <artifactId>spring-boot-maven-plugin</artifactId>
-                        <versionRange>[1,)</versionRange>
-                        <goals>
-                          <goal>build-info</goal>
-                        </goals>
-                      </pluginExecutionFilter>
-                      <action>
-                        <ignore />
-                      </action>
-                    </pluginExecution>
-                    <pluginExecution>
-                      <pluginExecutionFilter>
-                        <groupId>io.spring.javaformat</groupId>
-                        <artifactId>spring-javaformat-maven-plugin</artifactId>
-                        <versionRange>[0,)</versionRange>
-                        <goals>
-                          <goal>validate</goal>
                         </goals>
                       </pluginExecutionFilter>
                       <action>
