@@ -2,10 +2,11 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc
+  namespace: dev                      # Specify the namespace
 spec:
   accessModes:
-    - ReadWriteOnce
-  storageClassName: manual
+    - ReadWriteOnce                   # Same access mode as the PV
+  storageClassName: manual            # This matches the storage class name used in the PV
   resources:
     requests:
-      storage: 8Gi
+      storage: 8Gi                    # Same size as the PV
