@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+spec:
+  capacity:
+    storage: 8Gi                  # Size of the EBS volume
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce               # Only one node can write to this volume at a time
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  awsElasticBlockStore:
+    volumeID: vol-0787a14d31dda9dd7  # Replace with your actual EBS Volume ID
+    fsType: ext4                   # Filesystem type (ext4 is standard for Linux)
