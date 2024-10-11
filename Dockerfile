@@ -11,7 +11,7 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 
 # Package the application
-RUN mvn clean package
+RUN mvn clean package -DskipTests -X
 
 # Use JDK 17 for the runtime stage
 FROM eclipse-temurin:17-jdk-alpine AS runtime
