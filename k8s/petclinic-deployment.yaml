@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 54.224.77.33:8085/docker-hosted-repo/petclinic-app:13b79c2-65  # Use the correct version here
+        image: 54.224.77.33:8086/docker-hosted-repo/petclinic-app:13b79c2-65  # Use the correct version here
         ports:
         - containerPort: 8081 
         env:
