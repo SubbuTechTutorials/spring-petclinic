@@ -15,11 +15,11 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:4762570-90  # Updated with your AWS ECR image tag
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:a4f3067-1
         ports:
         - containerPort: 8081 
         env:
-        - name: SERVER_PORT   # Explicitly set the port to 8081
+        - name: SERVER_PORT   
           value: "8081"
         - name: MYSQL_URL
           valueFrom:
