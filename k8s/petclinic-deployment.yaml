@@ -15,10 +15,12 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:8b671f6-83  # Updated with your AWS ECR image tag
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:d3a4489-85  # Updated with your AWS ECR image tag
         ports:
         - containerPort: 8081 
         env:
+        - name: SERVER_PORT   # Explicitly set the port to 8081
+          value: "8081"
         - name: MYSQL_URL
           valueFrom:
             configMapKeyRef:
@@ -39,4 +41,3 @@ spec:
             configMapKeyRef:
               name: app-config
               key: MYSQL_DATABASE
-      # No imagePullSecrets needed for AWS ECR if the EKS node has IAM permissions
