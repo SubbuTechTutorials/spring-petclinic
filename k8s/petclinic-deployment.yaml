@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:d3a4489-85  # Updated with your AWS ECR image tag
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:f45d613-87  # Updated with your AWS ECR image tag
         ports:
         - containerPort: 8081 
         env:
