@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 54.224.77.33:8086/docker-hosted-repo/petclinic-app:13b79c2-65  # Use the correct version here
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:8b671f6-83  # Updated with your AWS ECR image tag
         ports:
         - containerPort: 8081 
         env:
@@ -39,5 +39,4 @@ spec:
             configMapKeyRef:
               name: app-config
               key: MYSQL_DATABASE
-      imagePullSecrets:
-      - name: nexus-docker-secret  # Use the Nexus Docker secret to pull the image
+      # No imagePullSecrets needed for AWS ECR if the EKS node has IAM permissions
