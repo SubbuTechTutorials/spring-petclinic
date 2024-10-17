@@ -2,7 +2,7 @@
 
 echo "Running Smoke Tests..."
 
-# Example: Use cURL to check the health endpoint
+# Check if the application is running (actuator health check)
 response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
 
 if [ "$response" -eq 200 ]; then
