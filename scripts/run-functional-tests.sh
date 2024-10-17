@@ -2,8 +2,8 @@
 
 echo "Running Functional Tests..."
 
-# Example: Run all functional tests using Maven (JUnit tests)
-mvn test -Dtest=com.example.FunctionalTestsSuite
+# Run unit/functional tests using Maven
+./mvnw test -Dtest=**/service/*.java -DfailIfNoTests=false
 
 test_status=$?
 
