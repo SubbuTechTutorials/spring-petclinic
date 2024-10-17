@@ -2,8 +2,8 @@
 
 echo "Running Integration Tests..."
 
-# Example: Run integration tests using a custom Maven profile
-mvn verify -Pintegration
+# Run the integration tests (involving MySQL, etc.)
+./mvnw verify -Dtest=**/MySqlIntegrationTests.java
 
 test_status=$?
 
