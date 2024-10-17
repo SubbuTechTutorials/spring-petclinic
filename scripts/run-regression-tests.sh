@@ -2,8 +2,8 @@
 
 echo "Running Regression Tests..."
 
-# Example: Run all regression tests (JUnit tests)
-mvn test -Dtest=com.example.RegressionTestSuite
+# Run all tests (typically, regression tests are a broader set)
+./mvnw test -Dtest=**/*.java -DfailIfNoTests=false
 
 test_status=$?
 
