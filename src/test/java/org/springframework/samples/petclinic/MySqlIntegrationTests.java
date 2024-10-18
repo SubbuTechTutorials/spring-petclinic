@@ -19,26 +19,14 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.aot.DisabledInAotMode;
 import org.springframework.web.client.RestTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("mysql")
+@ActiveProfiles("test")  // Switch to the H2 profile for tests
 @Testcontainers(disabledWithoutDocker = true)
 @DisabledInNativeImage
 @DisabledInAotMode
 class MySqlIntegrationTests {
-
-    @Container
-    static MySQLContainer<?> mysqlContainer = new MySQLContainer<>("mysql:8.0");
-
-    @DynamicPropertySource
-    static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysqlContainer::getJdbcUrl);
-        registry.add("spring.datasource.username", mysqlContainer::getUsername);
-        registry.add("spring.datasource.password", mysqlContainer::getPassword);
-    }
 
     @LocalServerPort
     int port;
