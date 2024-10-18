@@ -201,6 +201,31 @@
           <argLine>${argLine}</argLine> <!-- Ensures JaCoCo agent is hooked into Surefire -->
         </configuration>
       </plugin>
+      <plugin>
+   <groupId>org.apache.maven.plugins</groupId>
+   <artifactId>maven-surefire-plugin</artifactId>
+   <version>3.0.0-M5</version>
+   <configuration>
+      <argLine>${argLine}</argLine>
+   </configuration>
+</plugin>
+
+<plugin>
+   <groupId>org.apache.maven.plugins</groupId>
+   <artifactId>maven-failsafe-plugin</artifactId>
+   <version>3.0.0-M5</version>
+   <executions>
+      <execution>
+         <goals>
+            <goal>integration-test</goal>
+            <goal>verify</goal>
+         </goals>
+      </execution>
+   </executions>
+   <configuration>
+      <argLine>${argLine}</argLine>
+   </configuration>
+</plugin>
     </plugins>
   </build>
 
