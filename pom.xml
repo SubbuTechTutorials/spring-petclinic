@@ -21,17 +21,7 @@
     <java.version>17</java.version> <!-- Using Java 17 -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <project.build.outputTimestamp>2023-05-10T07:42:50Z</project.build.outputTimestamp>
-
-    <!-- Version Properties -->
-    <webjars-bootstrap.version>5.3.3</webjars-bootstrap.version>
-    <webjars-font-awesome.version>4.7.0</webjars-font-awesome.version>
-    <checkstyle.version>10.16.0</checkstyle.version>
     <jacoco.version>0.8.12</jacoco.version>
-    <libsass.version>0.2.29</libsass.version>
-    <maven-checkstyle.version>3.3.1</maven-checkstyle.version>
-    <nohttp-checkstyle.version>0.0.11</nohttp-checkstyle.version>
-    <spring-format.version>0.0.41</spring-format.version>
   </properties>
 
   <dependencies>
@@ -81,15 +71,8 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-testcontainers</artifactId> <!-- Testcontainers integration with Spring Boot -->
+      <artifactId>spring-boot-testcontainers</artifactId>
       <scope>test</scope>
-    </dependency>
-
-    <!-- Security update: Fixed vulnerability for spring-webmvc -->
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-webmvc</artifactId>
-      <version>6.1.13</version> <!-- This mitigates CVE-2024-38816 -->
     </dependency>
 
     <!-- Caching Libraries -->
@@ -106,12 +89,12 @@
     <dependency>
       <groupId>org.webjars.npm</groupId>
       <artifactId>bootstrap</artifactId>
-      <version>${webjars-bootstrap.version}</version>
+      <version>5.3.3</version>
     </dependency>
     <dependency>
       <groupId>org.webjars.npm</groupId>
       <artifactId>font-awesome</artifactId>
-      <version>${webjars-font-awesome.version}</version>
+      <version>4.7.0</version>
     </dependency>
 
     <!-- Testcontainers JUnit 5 Integration -->
@@ -121,72 +104,51 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- JAXB Dependencies (for XML processing) -->
+    <!-- Prometheus Integration -->
     <dependency>
-      <groupId>jakarta.xml.bind</groupId>
-      <artifactId>jakarta.xml.bind-api</artifactId>
-      <version>3.0.1</version>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.glassfish.jaxb</groupId>
-      <artifactId>jaxb-runtime</artifactId>
-      <version>3.0.1</version>
-    </dependency>
-    <dependency>
-      <groupId>com.sun.xml.bind</groupId>
-      <artifactId>jaxb-core</artifactId>
-      <version>3.0.1</version>
-    </dependency>
-
-    <dependency>
-      <groupId>jakarta.activation</groupId>
-      <artifactId>jakarta.activation-api</artifactId>
-      <version>2.0.1</version>
-    </dependency>
-    <dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-registry-prometheus</artifactId>
-  </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <!-- Spring Boot Maven Plugin -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
 
       <!-- JaCoCo Plugin for Code Coverage -->
-  <plugin>
-    <groupId>org.jacoco</groupId>
-    <artifactId>jacoco-maven-plugin</artifactId>
-    <version>${jacoco.version}</version>
-    <executions>
-        <execution>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
             <id>prepare-agent</id>
             <goals>
-                <goal>prepare-agent</goal>
+              <goal>prepare-agent</goal>
             </goals>
             <phase>test</phase>
             <configuration>
-                <destFile>${project.build.directory}/jacoco.exec</destFile>
-                <append>true</append>
+              <destFile>${project.build.directory}/jacoco.exec</destFile>
+              <append>true</append>
             </configuration>
-        </execution>
-        <execution>
+          </execution>
+          <execution>
             <id>report</id>
             <goals>
-                <goal>report</goal>
+              <goal>report</goal>
             </goals>
             <phase>verify</phase>
             <configuration>
-                <dataFile>${project.build.directory}/jacoco.exec</dataFile>
-                <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+              <dataFile>${project.build.directory}/jacoco.exec</dataFile>
+              <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
             </configuration>
-        </execution>
-    </executions>
-</plugin>
-
+          </execution>
+        </executions>
+      </plugin>
 
       <!-- SonarQube Plugin for Code Analysis -->
       <plugin>
@@ -201,10 +163,10 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.0.0-M5</version>
         <configuration>
+          <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
           <includes>
-            <include>**/*Test.java</include>  <!-- Include all Test cases -->
+            <include>**/*Test.java</include> <!-- Include all Test cases -->
           </includes>
-          <argLine>${argLine} -javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
         </configuration>
       </plugin>
     </plugins>
@@ -247,101 +209,5 @@
       </snapshots>
     </pluginRepository>
   </pluginRepositories>
-
-  <profiles>
-    <profile>
-      <id>css</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-dependency-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>unpack</id>
-                <?m2e execute onConfiguration,onIncremental?>
-                <phase>generate-resources</phase>
-                <goals>
-                  <goal>unpack</goal>
-                </goals>
-                <configuration>
-                  <artifactItems>
-                    <artifactItem>
-                      <groupId>org.webjars.npm</groupId>
-                      <artifactId>bootstrap</artifactId>
-                      <version>${webjars-bootstrap.version}</version>
-                    </artifactItem>
-                  </artifactItems>
-                  <outputDirectory>${project.build.directory}/webjars</outputDirectory>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-
-          <plugin>
-            <groupId>com.gitlab.haynes</groupId>
-            <artifactId>libsass-maven-plugin</artifactId>
-            <version>${libsass.version}</version>
-            <executions>
-              <execution>
-                <phase>generate-resources</phase>
-                <?m2e execute onConfiguration,onIncremental?>
-                <goals>
-                  <goal>compile</goal>
-                </goals>
-              </execution>
-            </executions>
-            <configuration>
-              <inputPath>${basedir}/src/main/scss/</inputPath>
-              <outputPath>${basedir}/src/main/resources/static/resources/css/</outputPath>
-              <includePath>
-                ${project.build.directory}/webjars/META-INF/resources/webjars/bootstrap/${webjars-bootstrap.version}/scss/
-              </includePath>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <id>m2e</id>
-      <activation>
-        <property>
-          <name>m2e.version</name>
-        </property>
-      </activation>
-      <build>
-        <pluginManagement>
-          <plugins>
-            <!-- This plugin's configuration is used to store Eclipse m2e settings
-              only. It has no influence on the Maven build itself. -->
-            <plugin>
-              <groupId>org.eclipse.m2e</groupId>
-              <artifactId>lifecycle-mapping</artifactId>
-              <version>${lifecycle-mapping}</version>
-              <configuration>
-                <lifecycleMappingMetadata>
-                  <pluginExecutions>
-                    <pluginExecution>
-                      <pluginExecutionFilter>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-checkstyle-plugin</artifactId>
-                        <versionRange>[1,)</versionRange>
-                        <goals>
-                          <goal>check</goal>
-                        </goals>
-                      </pluginExecutionFilter>
-                      <action>
-                        <ignore />
-                      </action>
-                    </pluginExecution>
-                  </pluginExecutions>
-                </lifecycleMappingMetadata>
-              </configuration>
-            </plugin>
-          </plugins>
-        </pluginManagement>
-      </build>
-    </profile>
-  </profiles>
 
 </project>
