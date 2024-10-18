@@ -114,6 +114,34 @@
       <artifactId>spring-webmvc</artifactId>
       <version>6.1.13</version> 
       </dependency>
+      <!-- JAXB API -->
+    <dependency>
+      <groupId>jakarta.xml.bind</groupId>
+      <artifactId>jakarta.xml.bind-api</artifactId>
+      <version>3.0.1</version> <!-- Ensure the version is compatible with your setup -->
+    </dependency>
+
+    <!-- JAXB Runtime -->
+    <dependency>
+      <groupId>org.glassfish.jaxb</groupId>
+      <artifactId>jaxb-runtime</artifactId>
+      <version>3.0.1</version>
+    </dependency>
+
+    <!-- JAXB Core -->
+    <dependency>
+      <groupId>com.sun.xml.bind</groupId>
+      <artifactId>jaxb-core</artifactId>
+      <version>3.0.1</version>
+    </dependency>
+
+    <!-- Activation API required for JAXB -->
+    <dependency>
+      <groupId>jakarta.activation</groupId>
+      <artifactId>jakarta.activation-api</artifactId>
+      <version>2.0.1</version>
+    </dependency>
+    
   </dependencies>
 
   <build>
