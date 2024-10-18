@@ -79,9 +79,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-    <groupId>com.h2database</groupId>
-    <artifactId>h2</artifactId>
-    <scope>test</scope>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
     </dependency>
 
     <!-- Caching Libraries -->
@@ -120,30 +120,33 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!-- Spring WebMVC Dependency -->
     <dependency>
-  <groupId>org.springframework</groupId>
-  <artifactId>spring-webmvc</artifactId>
-  <version>6.1.13</version> <!-- Updated version -->
-   </dependency>
-     <!-- Jakarta Validation API -->
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-webmvc</artifactId>
+      <version>6.1.13</version>
+    </dependency>
+
+    <!-- Jakarta Validation API -->
     <dependency>
-        <groupId>jakarta.validation</groupId>
-        <artifactId>jakarta.validation-api</artifactId>
-        <version>3.0.2</version>
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
+      <version>3.0.2</version>
     </dependency>
 
     <!-- Java Caching API (JSR-107) -->
     <dependency>
-        <groupId>javax.cache</groupId>
-        <artifactId>cache-api</artifactId>
-        <version>1.1.1</version>
+      <groupId>javax.cache</groupId>
+      <artifactId>cache-api</artifactId>
+      <version>1.1.1</version>
     </dependency>
 
     <!-- Ehcache for JSR-107 Caching -->
     <dependency>
-        <groupId>org.ehcache</groupId>
-        <artifactId>ehcache</artifactId>
-        <version>3.9.6</version>
+      <groupId>org.ehcache</groupId>
+      <artifactId>ehcache</artifactId>
+      <version>3.9.6</version>
     </dependency>
   </dependencies>
 
@@ -195,6 +198,7 @@
           <includes>
             <include>**/*Test.java</include> <!-- Include all Test cases -->
           </includes>
+          <argLine>${argLine}</argLine> <!-- Ensures JaCoCo agent is hooked into Surefire -->
         </configuration>
       </plugin>
     </plugins>
