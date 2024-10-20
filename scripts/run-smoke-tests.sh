@@ -3,7 +3,7 @@
 echo "Running Smoke Tests..."
 
 # Use the public DNS or IP of your EC2 instance
-PUBLIC_IP_OR_DOMAIN="ec2-54-173-48-88.compute-1.amazonaws.com"
+PUBLIC_IP_OR_DOMAIN="54.173.48.88"
 APP_PORT=8081
 
 # Number of retries
