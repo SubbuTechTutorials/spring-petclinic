@@ -4,7 +4,7 @@
   
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.springframework.samples</groupId>
-  <artifactId>spring-petclinic</artifactId>
+  <artifactId>petclinic</artifactId>
   <version>3.3.0-SNAPSHOT</version>
 
   <!-- Parent for Spring Boot -->
