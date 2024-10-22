@@ -16,7 +16,7 @@ spec:
       containers:
       - name: petclinic
         image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic:2d531d7-10  
-        imagePullPolicy: Always  
+        imagePullPolicy: Always
         ports:
         - containerPort: 8081
         env:
@@ -39,6 +39,6 @@ spec:
               key: MYSQL_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
-            configMapKeyRef:
-              name: app-config-preprod
-              key: MYSQL_DATABASE
+            secretKeyRef:
+              name: db-secrets-preprod
+              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
