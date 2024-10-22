@@ -13,7 +13,7 @@ pipeline {
         TRIVY_PAT_CREDENTIALS_ID = 'github-pat'
 
         AWS_ACCOUNT_ID = '905418425077'
-        ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/qa-petclinic'
+        ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic'
         AWS_REGION_ECR = 'ap-south-1'
 
         SONARQUBE_HOST_URL = credentials('sonarqube-host-url')
