@@ -36,14 +36,14 @@ spec:
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
-            configMapKeyRef:
-              name: app-config-preprod
-              key: MYSQL_DATABASE
+            secretKeyRef:
+              name: db-secrets-preprod
+              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
         volumeMounts:
         - mountPath: /var/lib/mysql
           name: mysql-persistent-storage
-          subPath: mysql  # Ensures that MySQL data is isolated
+          subPath: mysql
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-preprod  # Must match the PersistentVolumeClaim defined earlier
+          claimName: mysql-pvc-preprod  # Must match your PersistentVolumeClaim
