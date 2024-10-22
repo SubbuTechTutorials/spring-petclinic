@@ -17,7 +17,7 @@ pipeline {
         AWS_REGION_ECR = 'ap-south-1'
 
         SONARQUBE_HOST_URL = credentials('sonarqube-host-url')
-        SONARQUBE_PROJECT_KEY = 'PetClinic'
+        SONARQUBE_PROJECT_KEY = 'PetClinic-PreProd'
         SONARQUBE_TOKEN = credentials('sonar-credentials')
 
         TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
