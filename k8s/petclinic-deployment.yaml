@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: petclinic-app-qa
-  namespace: qa
+  name: petclinic-app-preprod
+  namespace: pre-prod
 spec:
   replicas: 2
   selector:
@@ -24,20 +24,20 @@ spec:
         - name: MYSQL_URL
           valueFrom:
             configMapKeyRef:
-              name: app-config-qa
+              name: app-config-preprod
               key: MYSQL_URL
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets-preprod
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets-preprod
               key: MYSQL_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: app-config-qa
+              name: app-config-preprod
               key: MYSQL_DATABASE
