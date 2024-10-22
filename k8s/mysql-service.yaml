@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql-service-qa
-  namespace: qa
+  name: mysql-service-preprod
+  namespace: pre-prod
 spec:
   type: ClusterIP  
   ports:
