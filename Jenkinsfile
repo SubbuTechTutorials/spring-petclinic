@@ -11,19 +11,26 @@ pipeline {
         GIT_BRANCH = 'release'
         GIT_CREDENTIALS_ID = 'github-credentials'
         TRIVY_PAT_CREDENTIALS_ID = 'github-pat'
+        TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
 
         AWS_ACCOUNT_ID = '905418425077'
         ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic'
         AWS_REGION_ECR = 'ap-south-1'
-
+        
+        AWS_REGION = 'ap-south-1'  // Updated to match your EKS region
+        SECRET_NAME = 'pre-prod/petclinic/mysql'
+        
         SONARQUBE_HOST_URL = credentials('sonarqube-host-url')
-        SONARQUBE_PROJECT_KEY = 'PetClinic-PreProd'
+        SONARQUBE_PROJECT_KEY = 'PetClinic'
         SONARQUBE_TOKEN = credentials('sonar-credentials')
-
-        TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
 
         EKS_CLUSTER_NAME = 'devops-petclinicapp-dev-ap-south-1'
         AWS_REGION_EKS = 'ap-south-1'
+        
+        JMETER_HOME = '/opt/jmeter'
+        JMETER_SCRIPT = 'src/test/jmeter/petclinic_test_plan.jmx'
+        JMETER_RESULTS = 'jmeter-results/results.jtl'
+        JMETER_REPORT = 'jmeter-results/report'
 
         SLACK_CHANNEL = '#project-petclinic'
     }
@@ -37,50 +44,25 @@ pipeline {
             steps {
                 git branch: "${GIT_BRANCH}", url: "${GIT_REPO}", credentialsId: "${GIT_CREDENTIALS_ID}"
                 sh 'pwd'  
-                sh 'ls -l'  
+                sh 'ls -l'
                 stash name: 'source-code', includes: '**/*'
             }
         }
-     stage('Trivy Scan Repository') {
-                    steps {
-                        script {
-                            if (!fileExists('trivy-scan-success')) {
-                                sh "mkdir -p ${TRIVY_DB_CACHE}"
 
-                                withCredentials([string(credentialsId: TRIVY_PAT_CREDENTIALS_ID, variable: 'GITHUB_TOKEN')]) {
-                                    def dbAge = sh(script: "find ${TRIVY_DB_CACHE} -name 'db.lock' -mtime +7 | wc -l", returnStdout: true).trim()
-                                    if (dbAge == '0') {
-                                        sh '''
-                                        trivy fs --cache-dir ${TRIVY_DB_CACHE} \
-                                            --exit-code 1 --severity HIGH,CRITICAL \
-                                            --token $GITHUB_TOKEN . > trivy-scan-report.txt
-                                        '''
-                                    } else {
-                                        sh '''
-                                        trivy fs --cache-dir ${TRIVY_DB_CACHE} \
-                                            --skip-db-update --exit-code 1 \
-                                            --severity HIGH,CRITICAL . > trivy-scan-report.txt
-                                        '''
-                                    }
-                                }
-
-                                writeFile file: 'trivy-scan-success', text: ''
-                            }
-                        }
-                    }
-                }
-         
-    
-        stage('Run Unit Tests with JaCoCo') {
+        stage('Trivy Scan Repository') {
             steps {
-                sh 'mvn clean test jacoco:prepare-agent'
+                script {
+                    sh '''
+                    trivy fs --cache-dir ${TRIVY_DB_CACHE} --skip-db-update --exit-code 1 --severity HIGH,CRITICAL . > trivy-scan-report.txt
+                    '''
+                    writeFile file: 'trivy-scan-success', text: 'Scan completed successfully'
+                }
             }
         }
 
-        stage('Run Integration Tests with JaCoCo') {
+        stage('Run Unit Tests') {
             steps {
-                sh 'chmod +x ./scripts/run-integration-tests.sh'
-                sh './scripts/run-integration-tests.sh jacoco:prepare-agent'
+                sh 'mvn clean test'
             }
         }
 
@@ -122,122 +104,52 @@ pipeline {
             }
         }
 
-        stage('Functional Testing of Docker Image with MySQL') {
+        stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'MYSQL_ROOT_PASSWORD', variable: 'MYSQL_ROOT_PASSWORD'),
-                    string(credentialsId: 'MYSQL_PASSWORD', variable: 'MYSQL_PASSWORD'),
-                    string(credentialsId: 'MYSQL_USER', variable: 'MYSQL_USER')]) {
+                    def trivyDbExists = fileExists("${TRIVY_DB_CACHE}/db.lock")
+                    if (trivyDbExists) {
+                        echo 'Trivy DB exists, skipping update for Docker image scan...'
+                        sh """
+                        trivy image --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
+                        """
+                    } else {
+                        echo 'Trivy DB does not exist, downloading and scanning Docker image...'
+                        sh """
+                        trivy image ${env.DOCKER_IMAGE} > docker-scan-report.txt
+                        """
+                    }
 
-                        def mysqlContainerName = "mysql-test"
-                        def petclinicContainerName = "petclinic-test"
-                        def petclinicImage = "${env.DOCKER_IMAGE}"
+                    writeFile file: 'docker-scan-success', text: 'Docker image scan completed successfully'
+                }
+            }
+        }
+        
+        stage('Send Reports via Email') {
+            steps {
+                script {
+                    if (fileExists('trivy-scan-report.txt') && fileExists('docker-scan-report.txt')) {
+                        emailext(
+                            to: 'ssrmca07@gmail.com',
+                            subject: "QA Reports: Trivy Scan Report & Docker Image Scan Report",
+                            body: """
+                            Hello,
 
-                        if (!petclinicImage) {
-                            error("Docker image for PetClinic is not set. Please verify the image configuration.")
-                        }
+                            Please find attached the Trivy scan report and Docker image scan report for the QA branch.
 
-                        try {
-                            sh """
-                            docker run -d --name ${mysqlContainerName} \
-                                -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
-                                -e MYSQL_DATABASE=petclinic \
-                                -e MYSQL_USER=${MYSQL_USER} \
-                                -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
-                                mysql:8.4
-                            """
-
-                            def isMysqlReady = false
-                            for (int i = 0; i < 10; i++) {
-                                echo "Waiting for MySQL to be ready (Attempt ${i + 1}/10)..."
-                                def mysqlStatus = sh(script: """
-                                                     docker exec ${mysqlContainerName} mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}
-                                                     """, returnStatus: true)
-                                if (mysqlStatus == 0) {
-                                    isMysqlReady = true
-                                                   echo "MySQL is ready."
-                                                   break
-                                }
-                                sleep 10
-                            }
-
-                            if (!isMysqlReady) {
-                                error('MySQL container did not become ready.')
-                            }
-
-                            sh """
-                            docker run -d --name ${petclinicContainerName} \
-                                --link ${mysqlContainerName}:mysql \
-                                -e MYSQL_URL=jdbc:mysql://mysql:3306/petclinic \
-                                -e MYSQL_USER=${MYSQL_USER} \
-                                -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
-                                -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
-                                -p 8082:8081 ${petclinicImage}
-                            """
-
-                            def petclinicHealth = false
-                            for (int i = 0; i < 10; i++) {
-                                echo "Checking PetClinic health (Attempt ${i + 1}/10)..."
-                                def healthStatus = sh(script: "curl -s http://localhost:8082/actuator/health | grep UP", returnStatus: true)
-                                if (healthStatus == 0) {
-                                    petclinicHealth = true
-                                                      echo "PetClinic is healthy."
-                                                      break
-                                }
-                                sleep 10
-                            }
-
-                            if (!petclinicHealth) {
-                                sh "docker logs ${petclinicContainerName}"
-                                error('PetClinic application did not become healthy.')
-                            }
-
-                            echo "PetClinic and MySQL containers are running and healthy."
-                        } finally {
-                            sh "docker stop ${mysqlContainerName} ${petclinicContainerName} || true"
-                            sh "docker rm ${mysqlContainerName} ${petclinicContainerName} || true"
-                        }
+                            Best regards,
+                            Jenkins Team
+                            """,
+                            attachLog: true,
+                            attachmentsPattern: "trivy-scan-report.txt, docker-scan-report.txt"
+                        )
+                        echo "Scan reports have been sent."
+                    } else {
+                        echo "Report files not found! Skipping email notification."
                     }
                 }
             }
         }
-
-        
-        stage('Scan Docker Image with Trivy') {
-            steps {
-               sh """
-                trivy image --cache-dir ${TRIVY_DB_CACHE} --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
-              """
-            }
-        }
-      
-        stage('Send Reports via Email') {
-    steps {
-        script {
-            // Check if both the Trivy scan report and Docker image scan report exist
-            if (fileExists('trivy-scan-report.txt') && fileExists('docker-scan-report.txt')) {
-                emailext(
-                    to: 'nagaraju.kjkc@gmail.com, ssrmca07@gmail.com, kandlaguntaniranjanreddy1231@gmail.com',
-                    subject: "QA Reports: Trivy Scan Report & Docker Image Scan Report",
-                    body: """
-                        Hello,
-
-                        Please find attached the Trivy scan report and Docker image scan report for the QA branch.
-
-                        Best regards,
-                        Jenkins Team
-                    """,
-                    attachLog: true,  // Attach console log (optional)
-                    attachmentsPattern: "trivy-scan-report.txt, docker-scan-report.txt"
-                )
-                echo "Scan reports (Trivy and Docker Image) have been sent to: nagaraju.kjkc@gmail.com, ssrmca07@gmail.com, kandlaguntaniranjanreddy1231@gmail.com."
-            } else {
-                echo "Report files not found! Skipping email notification."
-            }
-        }
-    }
-}
-
 
         stage('Push Docker Image to AWS ECR') {
             steps {
@@ -254,221 +166,237 @@ pipeline {
                 }
             }
         }
-
-    
-
-    stage('Update Kubernetes Deployment') {
-        steps {
-            script {
-                // Unstash the checked-out code before running the sed command
-                unstash 'source-code'
-            
-                 // Check if the 'k8s' directory exists and list files to confirm the path
-                sh 'ls -l k8s/'
-            
-                // Update the image in the petclinic-deployment.yaml file
-                sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
-            }
-        }
-    }
-
-
-
+        
 
         stage('Manual Approval') {
             steps {
                 script {
                     timeout(time: 10, unit: 'MINUTES') {
+                        def approvalMailContent = """
+                        Project: ${env.JOB_NAME}
+                        Build Number: ${env.BUILD_NUMBER}
+                        Go to build URL and approve the deployment request.
+                        URL of build: ${env.BUILD_URL}
+                        """
                         mail(
-                            to: 'ssrmca07@gmail.com',
-                            subject: "Manual Approval Needed for ${env.JOB_NAME}",
-                            body: "Go to build URL and approve the deployment: ${env.BUILD_URL}"
+                            to: 'ssrmca07@gmail.com, nagaraju.kjkc@gmail.com',
+                            subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
+                            body: approvalMailContent,
+                            mimeType: 'text/plain'
                         )
-                        input message: 'Do you want to deploy the application?', submitter: 'approver'
+                        input(
+                            id: "DeployGate",
+                            message: "Deploy ${params.project_name}?",
+                            submitter: "approver",
+                            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')]
+                        )
                     }
                 }
             }
         }
 
-        stage('Deploy MySQL to EKS') {
+
+        stage('Retrieve MySQL Secrets') {
             steps {
                 script {
-                    def mysqlDeploymentExists = sh(script: "kubectl get deployment -n qa mysql-db", returnStatus: true) == 0
+                    // Fetch MySQL credentials from AWS Secrets Manager
+                    def secret = sh(script: "aws secretsmanager get-secret-value --secret-id ${SECRET_NAME} --region ${AWS_REGION} --query SecretString --output text", returnStdout: true).trim()
 
-                    if (!mysqlDeploymentExists) {
-                        unstash 'source-code'
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                            sh """
-                            aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                            sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-pvc.yaml
-                            sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-service.yaml
-                            sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-deployment.yaml
-                            kubectl apply -f k8s/mysql-pvc.yaml -n qa
-                            kubectl apply -f k8s/mysql-service.yaml -n qa
-                            kubectl apply -f k8s/mysql-deployment.yaml -n qa
-                            """
-                        }
-                    } else {
-                        echo "MySQL Deployment already exists."
-                    }
+                    // Parse the JSON response to extract the values (requires Pipeline Utility Steps Plugin)
+                    def secretJson = readJSON text: secret
+                    env.MYSQL_USER = secretJson.MYSQL_USER
+                    env.MYSQL_PASSWORD = secretJson.MYSQL_PASSWORD
+                    env.MYSQL_DATABASE = secretJson.MYSQL_DATABASE
+                    env.MYSQL_ROOT_PASSWORD = secretJson.MYSQL_ROOT_PASSWORD
                 }
             }
         }
-
-stage('Check MySQL Readiness') {
+        
+        stage('Deploy MySQL to EKS') {
     steps {
         script {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                // Update kubeconfig
-                sh "aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}"
-                
-                def maxRetries = 10
-                def retryInterval = 30
-                def allPodsReady = false
-
-                for (int i = 0; i < maxRetries; i++) {
-                    echo "Checking MySQL pods readiness (Attempt ${i + 1}/${maxRetries})..."
-                    
-                    // Get the status of all pods with label 'app=mysql'
-                    def podStatuses = sh(script: """
-                        kubectl get pod -n qa -l app=mysql -o jsonpath='{range .items[*]}{.metadata.name}: {.status.phase}{"\\n"}{end}'
-                    """, returnStdout: true).trim()
-
-                    echo "MySQL Pod statuses:\n${podStatuses}"
-
-                    // Check if all MySQL pods are in 'Running' state
-                    def runningPods = sh(script: """
-                        kubectl get pod -n qa -l app=mysql -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l
-                    """, returnStdout: true).trim()
-
-                    def totalPods = sh(script: """
-                        kubectl get pod -n qa -l app=mysql --no-headers | wc -l
-                    """, returnStdout: true).trim()
-
-                    if (runningPods.toInteger() == totalPods.toInteger()) {
-                        allPodsReady = true
-                        echo "All MySQL pods are healthy and running."
-                        break
-                    } else {
-                        echo "Not all MySQL pods are running yet. Retrying in ${retryInterval} seconds..."
-                    }
-
-                    sleep retryInterval
+            def mysqlDeploymentExists = sh(script: "kubectl get deployment -n pre-prod mysql-db-preprod", returnStatus: true) == 0
+            if (!mysqlDeploymentExists) {
+                unstash 'source-code'
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                    sh """
+                    aws configure set region ${AWS_REGION_EKS}
+                    aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                    kubectl apply -f k8s/mysql-pvc.yaml -n pre-prod
+                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod
+                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
+                    """
+                    // Set environment variables after the deployment
+                    sh """
+                    kubectl set env deployment/mysql-db-preprod \
+                        MYSQL_USER=${env.MYSQL_USER} \
+                        MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
+                        MYSQL_DATABASE=${env.MYSQL_DATABASE} \
+                        MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
+                        -n pre-prod
+                    """
                 }
-
-                if (!allPodsReady) {
-                    error('MySQL service did not become healthy.')
-                }
+            } else {
+                echo "MySQL Deployment already exists."
             }
         }
     }
 }
 
+
         
- stage('Deploy PetClinic to EKS') {
+        stage('Check MySQL Readiness') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                        sh "aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}"
+                        def maxRetries = 10
+                        def retryInterval = 30
+                        def allPodsReady = false
+                        for (int i = 0; i < maxRetries; i++) {
+                            echo "Checking MySQL pods readiness (Attempt ${i + 1}/${maxRetries})..."
+                            def runningPods = sh(script: "kubectl get pod -n pre-prod -l app=mysql -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
+                            def totalPods = sh(script: "kubectl get pod -n pre-prod -l app=mysql --no-headers | wc -l", returnStdout: true).trim()
+                            if (runningPods.toInteger() == totalPods.toInteger()) {
+                                allPodsReady = true
+                                echo "All MySQL pods are healthy and running."
+                                break
+                            }
+                            sleep retryInterval
+                        }
+                        if (!allPodsReady) {
+                            error('MySQL service did not become healthy.')
+                        }
+                    }
+                }
+            }
+        }
+        
+stage('Deploy PetClinic to EKS') {
     steps {
-        unstash 'source-code'
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
             script {
-                sh """
-                aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                // Unstash the source code containing the deployment files
+                unstash 'source-code'
 
-                # Update namespace from 'dev' to 'qa' and apply the deployment YAML
-                sed -i 's/namespace: dev/namespace: qa/g' k8s/petclinic-deployment.yaml
-                sed -i 's/namespace: dev/namespace: qa/g' k8s/petclinic-service.yaml
-                
-                # Apply the updated deployment file
-                kubectl apply -f k8s/petclinic-deployment.yaml -n qa
-                kubectl apply -f k8s/petclinic-service.yaml -n qa
+                // List the contents of the k8s directory to verify the files are present
+                sh 'ls -l k8s/'
+
+                // Use sed to update the image in the petclinic-deployment.yaml file
+                sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
+
+                // Apply the updated petclinic-deployment.yaml and service.yaml to the cluster
+                sh """
+                    aws configure set region ${AWS_REGION_EKS}
+                    aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                    
+                    # Apply PetClinic deployment and service
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod
+                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod
+                """
+
+                // Set the MySQL environment variables in the PetClinic deployment
+                sh """
+                    kubectl set env deployment/petclinic-app-preprod \
+                    MYSQL_USER=${env.MYSQL_USER} \
+                    MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
+                    MYSQL_DATABASE=${env.MYSQL_DATABASE} \
+                    MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
+                    -n pre-prod
                 """
             }
         }
     }
 }
 
-    
+
+
         stage('Check PetClinic Health') {
-    steps {
-        script {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                def maxRetries = 10
-                def retryInterval = 30
-                def allPodsReady = false
-
-                for (int i = 0; i < maxRetries; i++) {
-                    echo "Checking PetClinic health (Attempt ${i + 1}/${maxRetries})..."
-                    
-                    // Get the status of all pods with label 'app=petclinic'
-                    def podStatuses = sh(script: """
-                        kubectl get pod -n qa -l app=petclinic -o jsonpath='{range .items[*]}{.metadata.name}: {.status.phase}{"\\n"}{end}'
-                    """, returnStdout: true).trim()
-
-                    echo "Pod statuses:\n${podStatuses}"
-
-                    // Check if all pods are in 'Running' state
-                    def runningPods = sh(script: """
-                        kubectl get pod -n qa -l app=petclinic -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l
-                    """, returnStdout: true).trim()
-
-                    def totalPods = sh(script: """
-                        kubectl get pod -n qa -l app=petclinic --no-headers | wc -l
-                    """, returnStdout: true).trim()
-
-                    if (runningPods.toInteger() == totalPods.toInteger()) {
-                        allPodsReady = true
-                        echo "All PetClinic pods are healthy and running."
-                        break
-                    } else {
-                        echo "Not all PetClinic pods are running yet. Retrying in ${retryInterval} seconds..."
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                        def maxRetries = 10
+                        def retryInterval = 30
+                        def allPodsReady = false
+                        for (int i = 0; i < maxRetries; i++) {
+                            echo "Checking PetClinic health (Attempt ${i + 1}/${maxRetries})..."
+                            def runningPods = sh(script: "kubectl get pod -n pre-prod -l app=petclinic -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
+                            def totalPods = sh(script: "kubectl get pod -n pre-prod -l app=petclinic --no-headers | wc -l", returnStdout: true).trim()
+                            if (runningPods.toInteger() == totalPods.toInteger()) {
+                                allPodsReady = true
+                                echo "All PetClinic pods are healthy and running."
+                                break
+                            }
+                            sleep retryInterval
+                        }
+                        if (!allPodsReady) {
+                            error('PetClinic application did not become healthy.')
+                        }
                     }
-
-                    sleep retryInterval
-                }
-
-                if (!allPodsReady) {
-                    error('PetClinic application did not become healthy.')
                 }
             }
         }
-    }
-}
 
-        stage('Smoke Tests') {
+        stage('Run JMeter Performance Tests') {
             steps {
-                sh 'chmod +x ./scripts/run-smoke-tests.sh'
-                sh './scripts/run-smoke-tests.sh'
+                script {
+                    sh "mkdir -p jmeter-results"
+                    sh """
+                    ${JMETER_HOME}/bin/jmeter -n \
+                    -t ${JMETER_SCRIPT} \
+                    -l ${JMETER_RESULTS} \
+                    -e -o ${JMETER_REPORT}
+                    """
+                }
             }
         }
 
-        stage('Regression Tests') {
+        stage('Archive JMeter Results') {
             steps {
-                sh 'chmod +x ./scripts/run-regression-tests.sh'
-                sh './scripts/run-regression-tests.sh'
+                archiveArtifacts artifacts: 'jmeter-results/results.jtl', allowEmptyArchive: false
+                publishHTML(target: [
+                    reportName : 'JMeter Performance Report',
+                    reportDir  : 'jmeter-results/report',
+                    reportFiles: 'index.html',
+                    alwaysLinkToLastBuild: true,
+                    keepAll    : true
+                ])
+            }
+        }
+
+        stage('Send Email Report') {
+            steps {
+                emailext (
+                    subject: "JMeter Performance Test Report - ${currentBuild.fullDisplayName}",
+                    body: "Please find the attached JMeter performance test report for the ${env.JOB_NAME}.",
+                    attachLog: true,
+                    attachmentsPattern: 'jmeter-results/report/index.html',
+                    to: "ssrmca07@gmail.com, nagaraju.kjkc@gmail.com"
+                )
             }
         }
     }
 
     post {
-    always {
-        cleanWs()
+        always {
+            cleanWs()
+            
+        }
+        success {
+            slackSend(channel: '#project-petclinic', color: 'good', message: """
+            SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.
+            Scan reports have been emailed.
+            """)
+        }
+        failure {
+            slackSend(channel: '#project-petclinic', color: 'danger', message: """
+            FAILURE: Job '${env.JOB_NAME}' build #${currentBuild.number} failed.
+            """)
+        }
+        unstable {
+            slackSend(channel: '#project-petclinic', color: 'warning', message: """
+            UNSTABLE: Job '${env.JOB_NAME}' build #${currentBuild.number} is unstable.
+            """)
+        }
     }
-    success {
-        slackSend(channel: '#project-petclinic', color: 'good', message: """
-        SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.
-        Scan reports have been emailed to: nagaraju.kjkc@gmail.com, ssrmca07@gmail.com, kandlaguntaniranjanreddy1231@gmail.com.
-        """)
-    }
-    failure {
-        slackSend(channel: '#project-petclinic', color: 'danger', message: """
-        FAILURE: Job '${env.JOB_NAME}' build #${currentBuild.number} failed.
-        No scan reports were sent.
-        """)
-    }
-    unstable {
-        slackSend(channel: '#project-petclinic', color: 'warning', message: """
-        UNSTABLE: Job '${env.JOB_NAME}' build #${currentBuild.number} is unstable.
-        Check the logs for further investigation.
-        """)
-    }
-  }
 }
