@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql-db-qa
-  namespace: qa
+  name: mysql-db-preprod
+  namespace: pre-prod
 spec:
   replicas: 1
   selector:
@@ -22,22 +22,22 @@ spec:
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets-preprod
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets-preprod
               key: MYSQL_PASSWORD
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets-preprod
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: app-config-qa
+              name: app-config-preprod
               key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
@@ -46,4 +46,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-qa  # Must match the PersistentVolumeClaim defined earlier
+          claimName: mysql-pvc-preprod  # Must match the PersistentVolumeClaim defined earlier
