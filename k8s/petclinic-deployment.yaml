@@ -15,11 +15,12 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic:842aefe-14
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic:2d531d7-10  
+        imagePullPolicy: Always  
         ports:
-        - containerPort: 8081 
+        - containerPort: 8081
         env:
-        - name: SERVER_PORT   
+        - name: SERVER_PORT
           value: "8081"
         - name: MYSQL_URL
           valueFrom:
