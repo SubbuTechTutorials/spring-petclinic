@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         GIT_REPO = 'https://github.com/SubbuTechTutorials/spring-petclinic.git'
-        GIT_BRANCH = 'qa'
+        GIT_BRANCH = 'release'
         GIT_CREDENTIALS_ID = 'github-credentials'
         TRIVY_PAT_CREDENTIALS_ID = 'github-pat'
 
