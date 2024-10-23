@@ -14,7 +14,7 @@ pipeline {
         TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
 
         AWS_ACCOUNT_ID = '905418425077'
-        ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic'
+        ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/prod-petclinic'
         AWS_REGION_ECR = 'ap-south-1'
         
         AWS_REGION = 'ap-south-1'  // Updated to match your EKS region
