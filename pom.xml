@@ -158,6 +158,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
 
+
       <!-- JaCoCo Plugin for Code Coverage -->
       <plugin>
         <groupId>org.jacoco</groupId>
