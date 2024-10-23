@@ -9,4 +9,4 @@ spec:
   storageClassName: manual            # This matches the storage class name used in the PV
   resources:
     requests:
-      storage: 2Gi                    # Same size as the PV
+      storage: 3Gi                    # Same size as the PV
