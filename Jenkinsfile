@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         GIT_REPO = 'https://github.com/SubbuTechTutorials/spring-petclinic.git'
-        GIT_BRANCH = 'release'
+        GIT_BRANCH = 'main'
         GIT_CREDENTIALS_ID = 'github-credentials'
         TRIVY_PAT_CREDENTIALS_ID = 'github-pat'
         TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
@@ -131,17 +131,31 @@ pipeline {
                     if (fileExists('trivy-scan-report.txt') && fileExists('docker-scan-report.txt')) {
                         emailext(
                             to: 'ssrmca07@gmail.com',
-                            subject: "QA Reports: Trivy Scan Report & Docker Image Scan Report",
+                            subject: "Prod CICD Reports: Trivy Scan Report & Docker Image Scan Report",
                             body: """
                             Hello,
 
                             Please find attached the Trivy scan report and Docker image scan report for the QA branch.
 
                             Best regards,
-                            Jenkins Team
+                            Team DevOps
                             """,
-                            attachLog: true,
-                            attachmentsPattern: "trivy-scan-report.txt, docker-scan-report.txt"
+                            attachLog: false,
+                            attachmentsPattern: "trivy-scan-report.txt"
+                        )
+                         emailext(
+                            to: 'ssrmca07@gmail.com',
+                            subject: "Prod CICD Reports: Docker Image Scan Report",
+                            body: """
+                            Hello,
+
+                            Please find attached the Trivy scan report and Docker image scan report for the QA branch.
+
+                            Best regards,
+                            Team DevOps
+                            """,
+                            attachLog: false,
+                            attachmentsPattern: "docker-scan-report.txt"
                         )
                         echo "Scan reports have been sent."
                     } else {
@@ -180,7 +194,7 @@ pipeline {
                         """
                         mail(
                             to: 'ssrmca07@gmail.com, nagaraju.kjkc@gmail.com',
-                            subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
+                            subject: "${currentBuild.result ?: 'IN PROGRESS'} CI: Project name -> PetClinic-Prod", 
                             body: approvalMailContent,
                             mimeType: 'text/plain'
                         )
@@ -222,9 +236,9 @@ pipeline {
                     sh """
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    kubectl apply -f k8s/mysql-pvc.yaml -n pre-prod
-                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod
-                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
+                    kubectl apply -f k8s/mysql-pvc.yaml -n prod
+                    kubectl apply -f k8s/mysql-service.yaml -n prod
+                    kubectl apply -f k8s/mysql-deployment.yaml -n prod
                     """
                     // Set environment variables after the deployment
                     sh """
@@ -255,8 +269,8 @@ pipeline {
                         def allPodsReady = false
                         for (int i = 0; i < maxRetries; i++) {
                             echo "Checking MySQL pods readiness (Attempt ${i + 1}/${maxRetries})..."
-                            def runningPods = sh(script: "kubectl get pod -n pre-prod -l app=mysql -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
-                            def totalPods = sh(script: "kubectl get pod -n pre-prod -l app=mysql --no-headers | wc -l", returnStdout: true).trim()
+                            def runningPods = sh(script: "kubectl get pod -n prod -l app=mysql -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
+                            def totalPods = sh(script: "kubectl get pod -n prod -l app=mysql --no-headers | wc -l", returnStdout: true).trim()
                             if (runningPods.toInteger() == totalPods.toInteger()) {
                                 allPodsReady = true
                                 echo "All MySQL pods are healthy and running."
@@ -291,8 +305,8 @@ stage('Deploy PetClinic to EKS') {
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                     
                     # Apply PetClinic deployment and service
-                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod
-                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n prod
+                    kubectl apply -f k8s/petclinic-service.yaml -n prod
                 """
 
                 // Set the MySQL environment variables in the PetClinic deployment
@@ -320,8 +334,8 @@ stage('Deploy PetClinic to EKS') {
                         def allPodsReady = false
                         for (int i = 0; i < maxRetries; i++) {
                             echo "Checking PetClinic health (Attempt ${i + 1}/${maxRetries})..."
-                            def runningPods = sh(script: "kubectl get pod -n pre-prod -l app=petclinic -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
-                            def totalPods = sh(script: "kubectl get pod -n pre-prod -l app=petclinic --no-headers | wc -l", returnStdout: true).trim()
+                            def runningPods = sh(script: "kubectl get pod -n prod -l app=petclinic -o jsonpath='{.items[*].status.phase}' | grep -o 'Running' | wc -l", returnStdout: true).trim()
+                            def totalPods = sh(script: "kubectl get pod -n prod -l app=petclinic --no-headers | wc -l", returnStdout: true).trim()
                             if (runningPods.toInteger() == totalPods.toInteger()) {
                                 allPodsReady = true
                                 echo "All PetClinic pods are healthy and running."
