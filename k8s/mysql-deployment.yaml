@@ -22,23 +22,23 @@ spec:
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
+              name: prod-secrets
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
+              name: prod-secrets
               key: MYSQL_PASSWORD
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
+              name: prod-secrets
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
-              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
+              name: prod-secrets
+              key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
           name: mysql-persistent-storage
@@ -46,4 +46,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-prod  # Must match your PersistentVolumeClaim
+          claimName: mysql-pvc-prod
