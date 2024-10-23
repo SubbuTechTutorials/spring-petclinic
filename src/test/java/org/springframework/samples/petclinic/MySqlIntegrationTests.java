@@ -1,19 +1,3 @@
-/*
- * Copyright 2012-2019 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.springframework.samples.petclinic;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +15,8 @@ import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.samples.petclinic.vet.VetRepository;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.aot.DisabledInAotMode;
 import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.MySQLContainer;
@@ -38,36 +24,43 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("mysql")
+@ActiveProfiles("test")  // Change the profile to "test"
 @Testcontainers(disabledWithoutDocker = true)
 @DisabledInNativeImage
 @DisabledInAotMode
 class MySqlIntegrationTests {
 
-	@ServiceConnection
-	@Container
-	static MySQLContainer<?> container = new MySQLContainer<>("mysql:8.4");
+    @Container
+    static MySQLContainer<?> mysqlContainer = new MySQLContainer<>("mysql:8.0");
 
-	@LocalServerPort
-	int port;
+    @DynamicPropertySource
+    static void overrideProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysqlContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", mysqlContainer::getUsername);
+        registry.add("spring.datasource.password", mysqlContainer::getPassword);
+        registry.add("spring.datasource.initialization-mode", () -> "always");  // Ensure schema initialization
+    }
 
-	@Autowired
-	private VetRepository vets;
+    @LocalServerPort
+    int port;
 
-	@Autowired
-	private RestTemplateBuilder builder;
+    @Autowired
+    private VetRepository vets;
 
-	@Test
-	void testFindAll() throws Exception {
-		vets.findAll();
-		vets.findAll(); // served from cache
-	}
+    @Autowired
+    private RestTemplateBuilder builder;
 
-	@Test
-	void testOwnerDetails() {
-		RestTemplate template = builder.rootUri("http://localhost:" + port).build();
-		ResponseEntity<String> result = template.exchange(RequestEntity.get("/owners/1").build(), String.class);
-		assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-	}
+    @Test
+    void testFindAll() throws Exception {
+        // Run findAll twice to test caching as well
+        vets.findAll();
+        vets.findAll(); // served from cache
+    }
 
+    @Test
+    void testOwnerDetails() {
+        RestTemplate template = builder.rootUri("http://localhost:" + port).build();
+        ResponseEntity<String> result = template.exchange(RequestEntity.get("/owners/1").build(), String.class);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
 }
