@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic:233aaef-14 
+        image: 905418425077.dkr.ecr.ap-south-1.amazonaws.com/preprod-petclinic:233aaef-14
         imagePullPolicy: Always
         ports:
         - containerPort: 8081
@@ -24,21 +24,21 @@ spec:
           value: "8081"
         - name: MYSQL_URL
           valueFrom:
-            configMapKeyRef:
-              name: app-config-prod
+            secretKeyRef:
+              name: prod-secrets
               key: MYSQL_URL
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
+              name: prod-secrets
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
+              name: prod-secrets
               key: MYSQL_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             secretKeyRef:
-              name: db-secrets-prod
-              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
+              name: prod-secrets
+              key: MYSQL_DATABASE
