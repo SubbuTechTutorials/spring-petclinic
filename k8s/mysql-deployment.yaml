@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql-db-preprod
-  namespace: pre-prod
+  name: mysql-db-prod
+  namespace: prod
 spec:
   replicas: 1
   selector:
@@ -22,22 +22,22 @@ spec:
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-preprod
+              name: db-secrets-prod
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-preprod
+              name: db-secrets-prod
               key: MYSQL_PASSWORD
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-preprod
+              name: db-secrets-prod
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             secretKeyRef:
-              name: db-secrets-preprod
+              name: db-secrets-prod
               key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
         volumeMounts:
         - mountPath: /var/lib/mysql
@@ -46,4 +46,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-preprod  # Must match your PersistentVolumeClaim
+          claimName: mysql-pvc-prod  # Must match your PersistentVolumeClaim
