@@ -444,12 +444,28 @@ stage('Check MySQL Readiness') {
     }
 }
 
-        stage('Smoke Tests') {
-            steps {
-                sh 'chmod +x ./scripts/run-smoke-tests.sh'
-                sh './scripts/run-smoke-tests.sh'
-            }
+stage('Smoke Tests') {
+    steps {
+        script {
+            // Fetch the Load Balancer DNS dynamically using kubectl or AWS CLI (depending on your setup)
+            def loadBalancerDNS = sh(script: """
+                aws elbv2 describe-load-balancers --region ${AWS_REGION_EKS} --query 'LoadBalancers[?LoadBalancerName==`devops-petclinicapp-lb`].DNSName' --output text
+            """, returnStdout: true).trim()
+
+            echo "Updating PUBLIC_IP_OR_DOMAIN in run-smoke-tests.sh with Load Balancer DNS: ${loadBalancerDNS}"
+
+            // Replace the PUBLIC_IP_OR_DOMAIN value in the script with the latest Load Balancer DNS
+            sh """
+            sed -i 's|PUBLIC_IP_OR_DOMAIN=.*|PUBLIC_IP_OR_DOMAIN="${loadBalancerDNS}"|' ./scripts/run-smoke-tests.sh
+            """
+
+            // Set execute permission and run the script
+            sh 'chmod +x ./scripts/run-smoke-tests.sh'
+            sh './scripts/run-smoke-tests.sh'
         }
+    }
+}
+
 
         stage('Regression Tests') {
             steps {
