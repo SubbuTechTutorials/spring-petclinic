@@ -446,27 +446,29 @@ stage('Check PetClinic Health') {
 stage('Smoke Tests') {
     steps {
         script {
-            // Use withCredentials to provide AWS credentials
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                // Fetch the Load Balancer DNS dynamically using AWS CLI
-                def loadBalancerDNS = sh(script: """
-                    aws elbv2 describe-load-balancers --region ${AWS_REGION_EKS} --query 'LoadBalancers[?LoadBalancerName==`devops-petclinicapp-lb`].DNSName' --output text
-                """, returnStdout: true).trim()
+            // Fetch the Load Balancer DNS from the Kubernetes service in the 'qa' namespace
+            def loadBalancerDNS = sh(script: """
+                kubectl get svc petclinic-service-qa -n qa -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+            """, returnStdout: true).trim()
 
-                echo "Updating PUBLIC_IP_OR_DOMAIN in run-smoke-tests.sh with Load Balancer DNS: ${loadBalancerDNS}"
-
-                // Replace the PUBLIC_IP_OR_DOMAIN value in the script with the latest Load Balancer DNS
-                sh """
-                sed -i 's|PUBLIC_IP_OR_DOMAIN=.*|PUBLIC_IP_OR_DOMAIN="${loadBalancerDNS}"|' ./scripts/run-smoke-tests.sh
-                """
-
-                // Set execute permission and run the script
-                sh 'chmod +x ./scripts/run-smoke-tests.sh'
-                sh './scripts/run-smoke-tests.sh'
+            if (loadBalancerDNS == "") {
+                error "Load Balancer DNS not found. Please check the petclinic-service-qa service in the qa namespace."
             }
+
+            echo "Updating PUBLIC_IP_OR_DOMAIN in run-smoke-tests.sh with Load Balancer DNS: ${loadBalancerDNS}"
+
+            // Update the PUBLIC_IP_OR_DOMAIN in the run-smoke-tests.sh script
+            sh """
+            sed -i 's|PUBLIC_IP_OR_DOMAIN=.*|PUBLIC_IP_OR_DOMAIN="${loadBalancerDNS}"|' ./scripts/run-smoke-tests.sh
+            """
+
+            // Set execute permission and run the smoke test script
+            sh 'chmod +x ./scripts/run-smoke-tests.sh'
+            sh './scripts/run-smoke-tests.sh'
         }
     }
 }
+
 
         stage('Regression Tests') {
             steps {
