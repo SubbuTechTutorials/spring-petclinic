@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql-db-qa
-  namespace: qa
+  name: mysql-db
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -22,28 +22,27 @@ spec:
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets
               key: MYSQL_PASSWORD
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets-qa
+              name: db-secrets
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: app-config-qa
+              name: app-config
               key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
-          name: mysql-persistent-storage
+          name: mysql-temp-storage
           subPath: mysql  # Ensures that MySQL data is isolated
       volumes:
-      - name: mysql-persistent-storage
-        persistentVolumeClaim:
-          claimName: mysql-pvc-qa  # Must match the PersistentVolumeClaim defined earlier
+      - name: mysql-temp-storage
+        emptyDir: {}  # Uses an emptyDir volume, data will not persist after pod restart
