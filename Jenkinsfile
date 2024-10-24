@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JDK 17'  // Make sure this matches your Jenkins JDK configuration
-        maven 'maven 3.9.8'  // Ensure this matches the Maven setup in Global Tool Configuration
+        jdk 'JDK 17'  
+        maven 'maven 3.9.8'  
     }
 
     environment {
@@ -16,6 +16,10 @@ pipeline {
         SONARQUBE_HOST_URL = 'http://44.201.120.105:9000/'  // Replace with your SonarQube URL
         SONARQUBE_PROJECT_KEY = 'PetClinic'
         SONARQUBE_TOKEN = credentials('sonar-credentials')  // Ensure this matches your credentials
+        
+        AWS_ACCOUNT_ID = '905418425077'
+        ECR_REPO_URL = '905418425077.dkr.ecr.ap-south-1.amazonaws.com/dev/petclinic'
+        AWS_REGION_ECR = 'ap-south-1'
         
         // EKS Cluster name and region
         EKS_CLUSTER_NAME = 'devops-petclinicapp-dev-ap-south-1'
@@ -98,65 +102,68 @@ pipeline {
                 }
             }
         }
-
-        // Manual Approval stage with Slack notification
-        stage('Manual Approval') {
+        
+         stage('Build Docker Image') {
             steps {
                 script {
-                    // Send Slack notification when manual approval is needed
-                    slackSend(channel: "${SLACK_CHANNEL}", color: 'warning', message: "Build #${env.BUILD_NUMBER} is waiting for manual approval. Please review: ${env.BUILD_URL}")
+                    if (!fileExists('docker-build-success')) {
+                        def COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        def IMAGE_TAG = "${COMMIT_HASH}-${BUILD_NUMBER}"
+                        env.DOCKER_IMAGE = "${ECR_REPO_URL}:${IMAGE_TAG}"
 
-                    timeout(time: 10, unit: 'MINUTES') {
-                        def approvalMailContent = """
-                        Project: ${env.JOB_NAME}
-                        Build Number: ${env.BUILD_NUMBER}
-                        Go to build URL and approve the deployment request.
-                        URL of build: ${env.BUILD_URL}
-                        """
-                        mail(
-                            to: 'ssrmca07@gmail.com',
-                            subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
-                            body: approvalMailContent,
-                            mimeType: 'text/plain'
-                        )
-                        input(
-                            id: "DeployGate",
-                            message: "Deploy ${params.project_name}?",
-                            submitter: "approver",
-                            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')]
-                        )
+                        if (!env.DOCKER_IMAGE) {
+                            error "Failed to set DOCKER_IMAGE."
+                        }
+                        echo "DOCKER_IMAGE: ${env.DOCKER_IMAGE}"
 
-                        // Send Slack notification after approval
-                        slackSend(channel: "${SLACK_CHANNEL}", color: 'good', message: "Build #${env.BUILD_NUMBER} was approved for deployment.")
+                        sh 'docker build -t $DOCKER_IMAGE . --progress=plain'
+                        writeFile file: 'docker-build-success', text: ''
                     }
                 }
             }
         }
-
-        stage('Deploy MySQL to EKS') {
+        
+         stage('Push Docker Image to AWS ECR') {
             steps {
                 script {
-                    def mysqlDeploymentExists = sh(script: "kubectl get deployment -n dev mysql-db", returnStatus: true) == 0
-
-                    if (!mysqlDeploymentExists) {
-                        unstash 'source-code'
+                    if (!fileExists('docker-push-success')) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
                             sh """
-                            aws configure set region ${AWS_REGION_EKS}
-                            aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                            aws ecr get-login-password --region ${AWS_REGION_ECR} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION_ECR}.amazonaws.com
+                            docker push ${env.DOCKER_IMAGE}
                             """
-                            sh """
-                                kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/mysql-pvc.yaml
-                                kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/mysql-service.yaml
-                                kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/mysql-deployment.yaml
-                             """
                         }
-                    } else {
-                        echo "MySQL Deployment already exists."
+                        writeFile file: 'docker-push-success', text: ''
                     }
                 }
             }
         }
+        
+
+stage('Deploy MySQL to EKS') {
+    steps {
+        script {
+            def mysqlDeploymentExists = sh(script: "kubectl get deployment -n dev mysql-db", returnStatus: true) == 0
+
+            if (!mysqlDeploymentExists) {
+                unstash 'source-code'  // Unstash the source code, which includes your local YAML files
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                    sh """
+                    aws configure set region ${AWS_REGION_EKS}
+                    aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                    """
+                    // Apply the correct MySQL service and deployment YAML files from the local workspace
+                    sh """
+                        kubectl apply -f k8s/mysql-service.yaml
+                        kubectl apply -f k8s/mysql-deployment.yaml 
+                    """
+                }
+            } else {
+                echo "MySQL Deployment already exists."
+            }
+        }
+    }
+}
 
         stage('Check MySQL Readiness') {
             steps {
@@ -191,24 +198,30 @@ pipeline {
             }
         }
 
-        stage('Deploy PetClinic to EKS') {
-            steps {
-                unstash 'source-code'
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                    script {
-                        sh """
-                        aws configure set region ${AWS_REGION_EKS}
-                        aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                        """
+       stage('Deploy PetClinic to EKS') {
+    steps {
+        script {
+            unstash 'source-code'  // Ensure the source code is available, including your YAML files
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                // List the contents of the k8s directory to verify the files are present
+                sh 'ls -l k8s/'
 
-                        sh """
-                            kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/petclinic-deployment.yaml
-                            kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/petclinic-service.yaml
-                         """
-                    }
-                }
+                // Use sed to update the image in the petclinic-deployment.yaml file
+                sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
+                
+                sh """
+                aws configure set region ${AWS_REGION_EKS}
+                aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                """
+                // Apply the correct PetClinic deployment and service YAML files from the local workspace
+                sh """
+                    kubectl apply -f k8s/petclinic-deployment.yaml  
+                    kubectl apply -f k8s/petclinic-service.yaml  
+                """
             }
         }
+    }
+}
 
         stage('Check PetClinic Health') {
             steps {
@@ -249,6 +262,7 @@ pipeline {
         always {
             cleanWs()  // Clean up the workspace after the build
         }
+        
         success {
             slackSend(channel: '#project-petclinic', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.")
         }
