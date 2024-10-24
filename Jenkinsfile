@@ -122,8 +122,7 @@ pipeline {
             }
         }
 
-      
-        stage('Functional Testing of Docker Image with MySQL') {
+stage('Functional Testing of Docker Image with MySQL') {
     steps {
         script {
             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
@@ -139,7 +138,6 @@ pipeline {
                 def MYSQL_ROOT_PASSWORD = sh(script: "kubectl get secret db-secrets-qa -n qa -o jsonpath='{.data.MYSQL_ROOT_PASSWORD}' | base64 --decode", returnStdout: true).trim()
 
                 // Fetch the MySQL URL and Database from the ConfigMap
-                def MYSQL_URL = sh(script: "kubectl get cm app-config-qa -n qa -o jsonpath='{.data.MYSQL_URL}'", returnStdout: true).trim()
                 def MYSQL_DATABASE = sh(script: "kubectl get cm app-config-qa -n qa -o jsonpath='{.data.MYSQL_DATABASE}'", returnStdout: true).trim()
 
                 def mysqlContainerName = "mysql-test"
@@ -178,11 +176,11 @@ pipeline {
                         error('MySQL container did not become ready.')
                     }
 
-                    // Start the PetClinic container linked with MySQL
+                    // Start the PetClinic container linked with MySQL (updating the MYSQL_URL to use internal Docker network)
                     sh """
                     docker run -d --name ${petclinicContainerName} \
                         --link ${mysqlContainerName}:mysql \
-                        -e MYSQL_URL=${MYSQL_URL} \
+                        -e MYSQL_URL=jdbc:mysql://mysql:3306/${MYSQL_DATABASE} \
                         -e MYSQL_USER=${MYSQL_USER} \
                         -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
                         -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
@@ -218,8 +216,6 @@ pipeline {
     }
 }
 
-
-        
         stage('Scan Docker Image with Trivy') {
             steps {
                sh """
