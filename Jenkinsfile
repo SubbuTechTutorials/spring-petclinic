@@ -313,10 +313,8 @@ stage('Functional Testing of Docker Image with MySQL') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
                             sh """
                             aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                            sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-pvc.yaml
                             sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-service.yaml
                             sed -i 's/namespace: dev/namespace: qa/g' k8s/mysql-deployment.yaml
-                            kubectl apply -f k8s/mysql-pvc.yaml -n qa
                             kubectl apply -f k8s/mysql-service.yaml -n qa
                             kubectl apply -f k8s/mysql-deployment.yaml -n qa
                             """
