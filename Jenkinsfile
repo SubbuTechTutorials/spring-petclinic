@@ -18,7 +18,7 @@ pipeline {
         AWS_REGION_ECR = 'ap-south-1'
         
         AWS_REGION = 'ap-south-1'  // Updated to match your EKS region
-        SECRET_NAME = 'pre-prod/petclinic/mysql'
+        SECRET_NAME = 'prod/petclinic-secrets'
         
         SONARQUBE_HOST_URL = credentials('sonarqube-host-url')
         SONARQUBE_PROJECT_KEY = 'PetClinic'
@@ -49,16 +49,6 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan Repository') {
-            steps {
-                script {
-                    sh '''
-                    trivy fs --cache-dir ${TRIVY_DB_CACHE} --skip-db-update --exit-code 1 --severity HIGH,CRITICAL . > trivy-scan-report.txt
-                    '''
-                    writeFile file: 'trivy-scan-success', text: 'Scan completed successfully'
-                }
-            }
-        }
 
         stage('Run Unit Tests') {
             steps {
@@ -103,67 +93,61 @@ pipeline {
                 }
             }
         }
-
-        stage('Scan Docker Image with Trivy') {
-            steps {
-                script {
-                    def trivyDbExists = fileExists("${TRIVY_DB_CACHE}/db.lock")
-                    if (trivyDbExists) {
-                        echo 'Trivy DB exists, skipping update for Docker image scan...'
-                        sh """
-                        trivy image --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
-                        """
-                    } else {
-                        echo 'Trivy DB does not exist, downloading and scanning Docker image...'
-                        sh """
-                        trivy image ${env.DOCKER_IMAGE} > docker-scan-report.txt
-                        """
-                    }
-
-                    writeFile file: 'docker-scan-success', text: 'Docker image scan completed successfully'
-                }
-            }
-        }
         
-        stage('Send Reports via Email') {
-            steps {
-                script {
-                    if (fileExists('trivy-scan-report.txt') && fileExists('docker-scan-report.txt')) {
-                        emailext(
-                            to: 'ssrmca07@gmail.com',
-                            subject: "Prod CICD Reports: Trivy Scan Report & Docker Image Scan Report",
-                            body: """
-                            Hello,
-
-                            Please find attached the Trivy scan report and Docker image scan report for the QA branch.
-
-                            Best regards,
-                            Team DevOps
-                            """,
-                            attachLog: false,
-                            attachmentsPattern: "trivy-scan-report.txt"
-                        )
-                         emailext(
-                            to: 'ssrmca07@gmail.com',
-                            subject: "Prod CICD Reports: Docker Image Scan Report",
-                            body: """
-                            Hello,
-
-                            Please find attached the Trivy scan report and Docker image scan report for the QA branch.
-
-                            Best regards,
-                            Team DevOps
-                            """,
-                            attachLog: false,
-                            attachmentsPattern: "docker-scan-report.txt"
-                        )
-                        echo "Scan reports have been sent."
-                    } else {
-                        echo "Report files not found! Skipping email notification."
-                    }
+stage('Scan Docker Image with Trivy') {
+    steps {
+        script {
+            // Check if the Trivy DB cache exists
+            def trivyDbExists = fileExists("${TRIVY_DB_CACHE}/db.lock")
+            if (!trivyDbExists) {
+                echo 'Trivy DB does not exist, downloading it once...'
+                // Use GitHub PAT to download Trivy DB to avoid rate limits
+                withCredentials([string(credentialsId: "${TRIVY_PAT_CREDENTIALS_ID}", variable: 'GITHUB_PAT')]) {
+                    sh """
+                    export GITHUB_TOKEN=${GITHUB_PAT}
+                    trivy --cache-dir ${TRIVY_DB_CACHE} image --download-db-only
+                    """
                 }
             }
+
+            // Scan Docker image with Trivy using the existing or freshly downloaded DB
+            echo 'Scanning Docker image with Trivy...'
+            sh """
+            trivy --cache-dir ${TRIVY_DB_CACHE} image --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
+            """
+            writeFile file: 'docker-scan-success', text: 'Docker image scan completed successfully'
         }
+    }
+}
+
+
+       
+stage('Send Reports via Email') {
+    steps {
+        script {
+            if (fileExists('docker-scan-report.txt')) {
+                emailext(
+                    to: 'ssrmca07@gmail.com',
+                    subject: "Prod CICD Reports: Docker Image Scan Report",
+                    body: """
+                    Hello,
+
+                    Please find attached the Docker image scan report for the QA branch.
+
+                    Best regards,
+                    Team DevOps
+                    """,
+                    attachLog: false,
+                    attachmentsPattern: "docker-scan-report.txt"
+                )
+                echo "Scan reports have been sent."
+            } else {
+                echo "Report files not found! Skipping email notification."
+            }
+        }
+    }
+}
+
 
         stage('Push Docker Image to AWS ECR') {
             steps {
@@ -208,57 +192,67 @@ pipeline {
                 }
             }
         }
+        
+stage('Retrieve MySQL Secrets') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-eks-credentials'
+        ]]) {
+            script {
+                // Fetch MySQL credentials from AWS Secrets Manager
+                def secret = sh(script: "aws secretsmanager get-secret-value --secret-id ${SECRET_NAME} --region ${AWS_REGION} --query SecretString --output text", returnStdout: true).trim()
 
-
-        stage('Retrieve MySQL Secrets') {
-            steps {
-                script {
-                    // Fetch MySQL credentials from AWS Secrets Manager
-                    def secret = sh(script: "aws secretsmanager get-secret-value --secret-id ${SECRET_NAME} --region ${AWS_REGION} --query SecretString --output text", returnStdout: true).trim()
-
-                    // Parse the JSON response to extract the values (requires Pipeline Utility Steps Plugin)
-                    def secretJson = readJSON text: secret
-                    env.MYSQL_USER = secretJson.MYSQL_USER
-                    env.MYSQL_PASSWORD = secretJson.MYSQL_PASSWORD
-                    env.MYSQL_DATABASE = secretJson.MYSQL_DATABASE
-                    env.MYSQL_ROOT_PASSWORD = secretJson.MYSQL_ROOT_PASSWORD
-                }
+                // Parse the JSON response to extract the values (requires Pipeline Utility Steps Plugin)
+                def secretJson = readJSON text: secret
+                env.MYSQL_USER = secretJson.MYSQL_USER
+                env.MYSQL_PASSWORD = secretJson.MYSQL_PASSWORD
+                env.MYSQL_DATABASE = secretJson.MYSQL_DATABASE
+                env.MYSQL_ROOT_PASSWORD = secretJson.MYSQL_ROOT_PASSWORD
+               
             }
         }
+    }
+}
+
         
-        stage('Deploy MySQL to EKS') {
+ stage('Deploy MySQL to EKS') {
     steps {
-        script {
-            def mysqlDeploymentExists = sh(script: "kubectl get deployment -n pre-prod mysql-db-preprod", returnStatus: true) == 0
-            if (!mysqlDeploymentExists) {
-                unstash 'source-code'
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-eks-credentials'
+        ]]) {
+            script {
+                // Check if MySQL deployment exists
+                def mysqlDeploymentExists = sh(script: "kubectl get deployment -n prod mysql-db-prod", returnStatus: true) == 0
+                if (!mysqlDeploymentExists) {
+                    unstash 'source-code'
+                    // Configure AWS region and update kubeconfig for EKS
                     sh """
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    kubectl apply -f k8s/mysql-pvc.yaml -n prod
                     kubectl apply -f k8s/mysql-service.yaml -n prod
                     kubectl apply -f k8s/mysql-deployment.yaml -n prod
                     """
                     // Set environment variables after the deployment
                     sh """
-                    kubectl set env deployment/mysql-db-preprod \
+                    kubectl set env deployment/mysql-db-prod \
                         MYSQL_USER=${env.MYSQL_USER} \
                         MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
                         MYSQL_DATABASE=${env.MYSQL_DATABASE} \
                         MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
-                        -n pre-prod
+                        -n prod
                     """
+                } else {
+                    echo "MySQL Deployment already exists."
                 }
-            } else {
-                echo "MySQL Deployment already exists."
             }
         }
     }
 }
 
 
-        
+      
         stage('Check MySQL Readiness') {
             steps {
                 script {
@@ -285,45 +279,49 @@ pipeline {
                 }
             }
         }
-        
-stage('Deploy PetClinic to EKS') {
+            
+        stage('Deploy PetClinic to EKS') {
     steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
             script {
-                // Unstash the source code containing the deployment files
-                unstash 'source-code'
+                // Check if PetClinic deployment exists
+                def petclinicDeploymentExists = sh(script: "kubectl get deployment -n prod petclinic-app-prod", returnStatus: true) == 0
+                if (!petclinicDeploymentExists) {
+                    // First-time deployment: apply both service and deployment
+                    echo "Deploying PetClinic service and deployment for the first time."
+                    unstash 'source-code'
 
-                // List the contents of the k8s directory to verify the files are present
-                sh 'ls -l k8s/'
-
-                // Use sed to update the image in the petclinic-deployment.yaml file
-                sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
-
-                // Apply the updated petclinic-deployment.yaml and service.yaml to the cluster
-                sh """
+                    // Configure AWS region and update kubeconfig for EKS
+                    sh """
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    
-                    # Apply PetClinic deployment and service
-                    kubectl apply -f k8s/petclinic-deployment.yaml -n prod
                     kubectl apply -f k8s/petclinic-service.yaml -n prod
-                """
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n prod
+                    """
+                } else {
+                    // Update only the Docker image without reapplying the entire deployment
+                    echo "PetClinic deployment already exists. Updating the image if needed."
 
-                // Set the MySQL environment variables in the PetClinic deployment
-                sh """
-                    kubectl set env deployment/petclinic-app-preprod \
-                    MYSQL_USER=${env.MYSQL_USER} \
-                    MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
-                    MYSQL_DATABASE=${env.MYSQL_DATABASE} \
-                    MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
-                    -n pre-prod
-                """
+                    // Get the current image of the deployment
+                    def currentImage = sh(script: "kubectl get deployment petclinic-app-prod -n prod -o jsonpath='{.spec.template.spec.containers[0].image}'", returnStdout: true).trim()
+
+                    // If the current image is different from the new image, update the deployment
+                    if (currentImage != "${env.DOCKER_IMAGE}") {
+                        echo "Updating the Docker image from ${currentImage} to ${env.DOCKER_IMAGE}"
+
+                        // Use kubectl set image to update only the image, avoiding environment variable conflicts
+                        sh """
+                        aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                        kubectl set image deployment/petclinic-app-prod petclinic=${env.DOCKER_IMAGE} -n prod
+                        """
+                    } else {
+                        echo "The Docker image is already up to date: ${currentImage}"
+                    }
+                }
             }
         }
     }
 }
-
-
 
         stage('Check PetClinic Health') {
             steps {
@@ -364,6 +362,13 @@ stage('Deploy PetClinic to EKS') {
                 }
             }
         }
+        
+        stage('Smoke Tests') {
+            steps {
+                sh 'chmod +x ./scripts/run-smoke-tests.sh'
+                sh './scripts/run-smoke-tests.sh'
+            }
+        }
 
         stage('Archive JMeter Results') {
             steps {
@@ -394,7 +399,6 @@ stage('Deploy PetClinic to EKS') {
     post {
         always {
             cleanWs()
-            
         }
         success {
             slackSend(channel: '#project-petclinic', color: 'good', message: """
