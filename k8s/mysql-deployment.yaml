@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql-db
+  name: mysql-db-qa
   namespace: qa
 spec:
   replicas: 1
@@ -22,22 +22,22 @@ spec:
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: db-secrets
+              name: db-secrets-qa
               key: MYSQL_USER
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets
+              name: db-secrets-qa
               key: MYSQL_PASSWORD
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-secrets
+              name: db-secrets-qa
               key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: app-config
+              name: app-config-qa
               key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
