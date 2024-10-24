@@ -123,84 +123,91 @@ pipeline {
         }
 
         stage('Functional Testing of Docker Image with MySQL') {
-            steps {
-                script {
-                    withCredentials([string(credentialsId: 'MYSQL_ROOT_PASSWORD', variable: 'MYSQL_ROOT_PASSWORD'),
-                    string(credentialsId: 'MYSQL_PASSWORD', variable: 'MYSQL_PASSWORD'),
-                    string(credentialsId: 'MYSQL_USER', variable: 'MYSQL_USER')]) {
+    steps {
+        script {
+            // Fetch the MySQL credentials from Kubernetes Secret in the QA namespace
+            def MYSQL_USER = sh(script: "kubectl get secret db-secrets-qa -n qa -o jsonpath='{.data.MYSQL_USER}' | base64 --decode", returnStdout: true).trim()
+            def MYSQL_PASSWORD = sh(script: "kubectl get secret db-secrets-qa -n qa -o jsonpath='{.data.MYSQL_PASSWORD}' | base64 --decode", returnStdout: true).trim()
+            def MYSQL_ROOT_PASSWORD = sh(script: "kubectl get secret db-secrets-qa -n qa -o jsonpath='{.data.MYSQL_ROOT_PASSWORD}' | base64 --decode", returnStdout: true).trim()
 
-                        def mysqlContainerName = "mysql-test"
-                        def petclinicContainerName = "petclinic-test"
-                        def petclinicImage = "${env.DOCKER_IMAGE}"
+            // Fetch the MySQL URL and Database from the ConfigMap
+            def MYSQL_URL = sh(script: "kubectl get cm app-config-qa -n qa -o jsonpath='{.data.MYSQL_URL}'", returnStdout: true).trim()
+            def MYSQL_DATABASE = sh(script: "kubectl get cm app-config-qa -n qa -o jsonpath='{.data.MYSQL_DATABASE}'", returnStdout: true).trim()
 
-                        if (!petclinicImage) {
-                            error("Docker image for PetClinic is not set. Please verify the image configuration.")
-                        }
+            def mysqlContainerName = "mysql-test"
+            def petclinicContainerName = "petclinic-test"
+            def petclinicImage = "${env.DOCKER_IMAGE}"
 
-                        try {
-                            sh """
-                            docker run -d --name ${mysqlContainerName} \
-                                -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
-                                -e MYSQL_DATABASE=petclinic \
-                                -e MYSQL_USER=${MYSQL_USER} \
-                                -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
-                                mysql:8.4
-                            """
+            if (!petclinicImage) {
+                error("Docker image for PetClinic is not set. Please verify the image configuration.")
+            }
 
-                            def isMysqlReady = false
-                            for (int i = 0; i < 10; i++) {
-                                echo "Waiting for MySQL to be ready (Attempt ${i + 1}/10)..."
-                                def mysqlStatus = sh(script: """
-                                                     docker exec ${mysqlContainerName} mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}
-                                                     """, returnStatus: true)
-                                if (mysqlStatus == 0) {
-                                    isMysqlReady = true
-                                                   echo "MySQL is ready."
-                                                   break
-                                }
-                                sleep 10
-                            }
+            try {
+                // Start the MySQL container
+                sh """
+                docker run -d --name ${mysqlContainerName} \
+                    -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
+                    -e MYSQL_DATABASE=${MYSQL_DATABASE} \
+                    -e MYSQL_USER=${MYSQL_USER} \
+                    -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
+                    mysql:8.4
+                """
 
-                            if (!isMysqlReady) {
-                                error('MySQL container did not become ready.')
-                            }
-
-                            sh """
-                            docker run -d --name ${petclinicContainerName} \
-                                --link ${mysqlContainerName}:mysql \
-                                -e MYSQL_URL=jdbc:mysql://mysql:3306/petclinic \
-                                -e MYSQL_USER=${MYSQL_USER} \
-                                -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
-                                -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
-                                -p 8082:8081 ${petclinicImage}
-                            """
-
-                            def petclinicHealth = false
-                            for (int i = 0; i < 10; i++) {
-                                echo "Checking PetClinic health (Attempt ${i + 1}/10)..."
-                                def healthStatus = sh(script: "curl -s http://localhost:8082/actuator/health | grep UP", returnStatus: true)
-                                if (healthStatus == 0) {
-                                    petclinicHealth = true
-                                                      echo "PetClinic is healthy."
-                                                      break
-                                }
-                                sleep 10
-                            }
-
-                            if (!petclinicHealth) {
-                                sh "docker logs ${petclinicContainerName}"
-                                error('PetClinic application did not become healthy.')
-                            }
-
-                            echo "PetClinic and MySQL containers are running and healthy."
-                        } finally {
-                            sh "docker stop ${mysqlContainerName} ${petclinicContainerName} || true"
-                            sh "docker rm ${mysqlContainerName} ${petclinicContainerName} || true"
-                        }
+                // Wait for MySQL to become ready
+                def isMysqlReady = false
+                for (int i = 0; i < 10; i++) {
+                    echo "Waiting for MySQL to be ready (Attempt ${i + 1}/10)..."
+                    def mysqlStatus = sh(script: "docker exec ${mysqlContainerName} mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}", returnStatus: true)
+                    if (mysqlStatus == 0) {
+                        isMysqlReady = true
+                        echo "MySQL is ready."
+                        break
                     }
+                    sleep 10
                 }
+
+                if (!isMysqlReady) {
+                    error('MySQL container did not become ready.')
+                }
+
+                // Start the PetClinic container linked with MySQL
+                sh """
+                docker run -d --name ${petclinicContainerName} \
+                    --link ${mysqlContainerName}:mysql \
+                    -e MYSQL_URL=${MYSQL_URL} \
+                    -e MYSQL_USER=${MYSQL_USER} \
+                    -e MYSQL_PASSWORD=${MYSQL_PASSWORD} \
+                    -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
+                    -p 8082:8081 ${petclinicImage}
+                """
+
+                // Check the health of the PetClinic application
+                def petclinicHealth = false
+                for (int i = 0; i < 10; i++) {
+                    echo "Checking PetClinic health (Attempt ${i + 1}/10)..."
+                    def healthStatus = sh(script: "curl -s http://localhost:8082/actuator/health | grep UP", returnStatus: true)
+                    if (healthStatus == 0) {
+                        petclinicHealth = true
+                        echo "PetClinic is healthy."
+                        break
+                    }
+                    sleep 10
+                }
+
+                if (!petclinicHealth) {
+                    sh "docker logs ${petclinicContainerName}"
+                    error('PetClinic application did not become healthy.')
+                }
+
+                echo "PetClinic and MySQL containers are running and healthy."
+            } finally {
+                // Clean up the containers after the test
+                sh "docker stop ${mysqlContainerName} ${petclinicContainerName} || true"
+                sh "docker rm ${mysqlContainerName} ${petclinicContainerName} || true"
             }
         }
+    }
+}
 
         
         stage('Scan Docker Image with Trivy') {
