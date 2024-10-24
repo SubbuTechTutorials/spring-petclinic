@@ -69,7 +69,6 @@ pipeline {
                         }
                     }
                 }
-         
     
         stage('Run Unit Tests with JaCoCo') {
             steps {
