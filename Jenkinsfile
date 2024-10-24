@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JDK 17'  // Name that matches your Jenkins configuration
-        maven 'maven 3.9.8'  // Make sure this matches the Maven name configured in Global Tool Configuration
+        jdk 'JDK 17'  // Make sure this matches your Jenkins JDK configuration
+        maven 'maven 3.9.8'  // Ensure this matches the Maven setup in Global Tool Configuration
     }
 
     environment {
@@ -15,19 +15,21 @@ pipeline {
         // SonarQube settings
         SONARQUBE_HOST_URL = 'http://44.201.120.105:9000/'  // Replace with your SonarQube URL
         SONARQUBE_PROJECT_KEY = 'PetClinic'
-        SONARQUBE_TOKEN = credentials('sonar-credentials')
+        SONARQUBE_TOKEN = credentials('sonar-credentials')  // Ensure this matches your credentials
         
         // EKS Cluster name and region
         EKS_CLUSTER_NAME = 'devops-petclinicapp-dev-ap-south-1'
-        AWS_REGION_EKS = 'ap-south-1'  // EKS region
+        AWS_REGION_EKS = 'ap-south-1'
         
         // Set local directory to cache Trivy DB
         TRIVY_DB_CACHE = "/var/lib/jenkins/trivy-db"
+
+        // Slack environment variables
+        SLACK_CHANNEL = '#project-petclinic'  // Replace with your Slack channel
     }
 
     options {
-        // Skip stages after unstable or failure
-        skipStagesAfterUnstable()
+        skipStagesAfterUnstable()  // Skip stages if a previous stage fails
     }
 
     stages {
@@ -44,12 +46,11 @@ pipeline {
                     if (!fileExists('trivy-scan-success')) {
                         sh "mkdir -p ${TRIVY_DB_CACHE}"
                         withCredentials([string(credentialsId: "${TRIVY_PAT_CREDENTIALS_ID}", variable: 'GITHUB_TOKEN')]) {
-                            sh 'export TRIVY_AUTH_TOKEN=$GITHUB_TOKEN'
-                            def dbExists = sh(script: "test -f ${TRIVY_DB_CACHE}/db.lock && echo 'true' || echo 'false'", returnStdout: true).trim()
-                            if (dbExists == 'true') {
-                                sh "trivy fs --cache-dir ${TRIVY_DB_CACHE} --skip-db-update --exit-code 1 --severity HIGH,CRITICAL ."
+                            def dbAge = sh(script: "find ${TRIVY_DB_CACHE} -name 'db.lock' -mtime +7 | wc -l", returnStdout: true).trim()
+                            if (dbAge != '1') {
+                                sh "trivy fs --cache-dir ${TRIVY_DB_CACHE} --exit-code 1 --severity HIGH,CRITICAL --token $GITHUB_TOKEN ."
                             } else {
-                                sh "trivy fs --cache-dir ${TRIVY_DB_CACHE} --exit-code 1 --severity HIGH,CRITICAL ."
+                                sh "trivy fs --cache-dir ${TRIVY_DB_CACHE} --skip-db-update --exit-code 1 --severity HIGH,CRITICAL ."
                             }
                         }
                         writeFile file: 'trivy-scan-success', text: ''
@@ -93,6 +94,40 @@ pipeline {
                             """
                         }
                         writeFile file: 'sonarqube-analysis-success', text: ''
+                    }
+                }
+            }
+        }
+
+        // Manual Approval stage with Slack notification
+        stage('Manual Approval') {
+            steps {
+                script {
+                    // Send Slack notification when manual approval is needed
+                    slackSend(channel: "${SLACK_CHANNEL}", color: 'warning', message: "Build #${env.BUILD_NUMBER} is waiting for manual approval. Please review: ${env.BUILD_URL}")
+
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def approvalMailContent = """
+                        Project: ${env.JOB_NAME}
+                        Build Number: ${env.BUILD_NUMBER}
+                        Go to build URL and approve the deployment request.
+                        URL of build: ${env.BUILD_URL}
+                        """
+                        mail(
+                            to: 'ssrmca07@gmail.com',
+                            subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
+                            body: approvalMailContent,
+                            mimeType: 'text/plain'
+                        )
+                        input(
+                            id: "DeployGate",
+                            message: "Deploy ${params.project_name}?",
+                            submitter: "approver",
+                            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')]
+                        )
+
+                        // Send Slack notification after approval
+                        slackSend(channel: "${SLACK_CHANNEL}", color: 'good', message: "Build #${env.BUILD_NUMBER} was approved for deployment.")
                     }
                 }
             }
@@ -161,13 +196,11 @@ pipeline {
                 unstash 'source-code'
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
                     script {
-                        // Configure AWS CLI to set the EKS region manually
                         sh """
                         aws configure set region ${AWS_REGION_EKS}
                         aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                         """
 
-                        // Apply the Kubernetes YAML files for PetClinic
                         sh """
                             kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/petclinic-deployment.yaml
                             kubectl apply -f https://raw.githubusercontent.com/SubbuTechTutorials/spring-petclinic/develop/k8s/petclinic-service.yaml
@@ -212,18 +245,18 @@ pipeline {
         }
     }
 
-     post {
+    post {
         always {
             cleanWs()  // Clean up the workspace after the build
         }
         success {
-            slackSend (channel: '#project-petclinic', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.")
+            slackSend(channel: '#project-petclinic', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.")
         }
         failure {
-            slackSend (channel: '#project-petclinic', color: 'danger', message: "FAILURE: Job '${env.JOB_NAME} build [${currentBuild.number}]' failed.")
+            slackSend(channel: '#project-petclinic', color: 'danger', message: "FAILURE: Job '${env.JOB_NAME}' build #${currentBuild.number} failed.")
         }
         unstable {
-            slackSend (channel: '#project-petclinic', color: 'warning', message: "UNSTABLE: Job '${env.JOB_NAME} build [${currentBuild.number}]' is unstable.")
+            slackSend(channel: '#project-petclinic', color: 'warning', message: "UNSTABLE: Job '${env.JOB_NAME}' build #${currentBuild.number} is unstable.")
         }
     }
 }
