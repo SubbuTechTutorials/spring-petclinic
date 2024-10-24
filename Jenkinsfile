@@ -267,7 +267,6 @@ stage('Functional Testing of Docker Image with MySQL') {
             }
         }
 
-    
 
     stage('Update Kubernetes Deployment') {
         steps {
@@ -283,8 +282,6 @@ stage('Functional Testing of Docker Image with MySQL') {
             }
         }
     }
-
-
 
 
         stage('Manual Approval') {
