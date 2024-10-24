@@ -397,8 +397,7 @@ stage('Check MySQL Readiness') {
     }
 }
 
-    
-        stage('Check PetClinic Health') {
+stage('Check PetClinic Health') {
     steps {
         script {
             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
@@ -468,7 +467,6 @@ stage('Smoke Tests') {
         }
     }
 }
-
 
         stage('Regression Tests') {
             steps {
