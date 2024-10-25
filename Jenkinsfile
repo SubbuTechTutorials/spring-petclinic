@@ -306,7 +306,7 @@ stage('Deploy PetClinic to EKS') {
                     echo "PetClinic deployment already exists. Updating the image if needed."
 
                     // Get the current image of the deployment
-                    def currentImage = sh(script: "kubectl get deployment petclinic-app-prod -n pre-prod -o jsonpath='{.spec.template.spec.containers[0].image}'", returnStdout: true).trim()
+                    def currentImage = sh(script: "kubectl get deployment petclinic-app-preprod -n pre-prod -o jsonpath='{.spec.template.spec.containers[0].image}'", returnStdout: true).trim()
 
                     // If the current image is different from the new image, update the deployment
                     if (currentImage != "${env.DOCKER_IMAGE}") {
