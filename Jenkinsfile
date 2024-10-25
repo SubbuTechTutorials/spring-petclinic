@@ -284,43 +284,48 @@ stage('Retrieve MySQL Secrets') {
             }
         }
         
-stage('Deploy PetClinic to EKS') {
+           stage('Deploy PetClinic to EKS') {
     steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
             script {
-                // Unstash the source code containing the deployment files
-                unstash 'source-code'
+                // Check if PetClinic deployment exists
+                def petclinicDeploymentExists = sh(script: "kubectl get deployment -n pre-prod petclinic-app-preprod", returnStatus: true) == 0
+                if (!petclinicDeploymentExists) {
+                    // First-time deployment: apply both service and deployment
+                    echo "Deploying PetClinic service and deployment for the first time."
+                    unstash 'source-code'
 
-                // List the contents of the k8s directory to verify the files are present
-                sh 'ls -l k8s/'
-
-                // Use sed to update the image in the petclinic-deployment.yaml file
-                sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
-
-                // Apply the updated petclinic-deployment.yaml and service.yaml to the cluster
-                sh """
+                    // Configure AWS region and update kubeconfig for EKS
+                    sh """
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    
-                    # Apply PetClinic deployment and service
-                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod 
-                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod 
-                """
+                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod
+                    """
+                } else {
+                    // Update only the Docker image without reapplying the entire deployment
+                    echo "PetClinic deployment already exists. Updating the image if needed."
 
-                // Set the MySQL environment variables in the PetClinic deployment
-                sh """
-                    kubectl set env deployment/petclinic-app-preprod \
-                    MYSQL_USER=${env.MYSQL_USER} \
-                    MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
-                    MYSQL_DATABASE=${env.MYSQL_DATABASE} \
-                    MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
-                    -n pre-prod
-                """
+                    // Get the current image of the deployment
+                    def currentImage = sh(script: "kubectl get deployment petclinic-app-prod -n pre-prod -o jsonpath='{.spec.template.spec.containers[0].image}'", returnStdout: true).trim()
+
+                    // If the current image is different from the new image, update the deployment
+                    if (currentImage != "${env.DOCKER_IMAGE}") {
+                        echo "Updating the Docker image from ${currentImage} to ${env.DOCKER_IMAGE}"
+
+                        // Use kubectl set image to update only the image, avoiding environment variable conflicts
+                        sh """
+                        aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                        kubectl set image deployment/petclinic-app-preprod petclinic=${env.DOCKER_IMAGE} -n pre-prod
+                        """
+                    } else {
+                        echo "The Docker image is already up to date: ${currentImage}"
+                    }
+                }
             }
         }
     }
 }
-
 
 
         stage('Check PetClinic Health') {
