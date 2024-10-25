@@ -233,8 +233,8 @@ stage('Retrieve MySQL Secrets') {
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                     
                     # Apply MySQL service and deployment manifests
-                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod
-                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
+                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod --prune
+                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod --prune
                     """
                 }
                 echo "MySQL Deployment created successfully."
@@ -291,8 +291,8 @@ stage('Deploy PetClinic to EKS') {
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                     
                     # Apply PetClinic deployment and service
-                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod
-                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod --prune
+                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod --prune
                 """
 
                 // Set the MySQL environment variables in the PetClinic deployment
