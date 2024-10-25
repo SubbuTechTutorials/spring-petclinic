@@ -221,32 +221,40 @@ stage('Retrieve MySQL Secrets') {
 
    stage('Deploy MySQL to EKS') {
     steps {
-        script {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
-                // Set AWS region and update kubeconfig to authenticate kubectl commands
-                sh """
-                aws configure set region ${AWS_REGION_EKS}
-                aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                """
-
-                // Check if the MySQL deployment already exists
-                def mysqlDeploymentExists = sh(script: "kubectl get deployment mysql-db-preprod -n pre-prod", returnStatus: true) == 0
-                
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-eks-credentials'
+        ]]) {
+            script {
+                // Check if MySQL deployment exists
+                def mysqlDeploymentExists = sh(script: "kubectl get deployment -n pre-prod mysql-db-preprod", returnStatus: true) == 0
                 if (!mysqlDeploymentExists) {
-                    // Only apply the deployment if it doesn't already exist
                     unstash 'source-code'
+                    // Configure AWS region and update kubeconfig for EKS
                     sh """
+                    aws configure set region ${AWS_REGION_EKS}
+                    aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                     kubectl apply -f k8s/mysql-service.yaml -n pre-prod
                     kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
                     """
-                    echo "MySQL Deployment created successfully."
+                    // Set environment variables after the deployment
+                    sh """
+                    kubectl set env deployment/mysql-db-prod \
+                        MYSQL_USER=${env.MYSQL_USER} \
+                        MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
+                        MYSQL_DATABASE=${env.MYSQL_DATABASE} \
+                        MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
+                        -n pre-prod
+                    """
                 } else {
-                    echo "MySQL Deployment already exists. Skipping re-deployment."
+                    echo "MySQL Deployment already exists."
                 }
             }
         }
     }
 }
+
+
 
         
         stage('Check MySQL Readiness') {
@@ -295,8 +303,8 @@ stage('Deploy PetClinic to EKS') {
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
                     
                     # Apply PetClinic deployment and service
-                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod --prune
-                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod --prune
+                    kubectl apply -f k8s/petclinic-deployment.yaml -n pre-prod 
+                    kubectl apply -f k8s/petclinic-service.yaml -n pre-prod 
                 """
 
                 // Set the MySQL environment variables in the PetClinic deployment
