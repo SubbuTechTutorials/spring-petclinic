@@ -41,8 +41,9 @@ spec:
               key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
-          name: mysql-temp-storage
+          name: mysql-storage  # Updated volume name to match the PVC
           subPath: mysql  # Ensures that MySQL data is isolated
       volumes:
-      - name: mysql-temp-storage
-        emptyDir: {}  # Uses an emptyDir volume, data will not persist after pod restart
+      - name: mysql-storage  # Updated to match volumeMount name
+        persistentVolumeClaim:
+          claimName: mysql-pvc-dev  # References the Dev PVC
