@@ -219,38 +219,31 @@ stage('Retrieve MySQL Secrets') {
     }
 }
 
-        
-        stage('Deploy MySQL to EKS') {
+    stage('Deploy MySQL to EKS') {
     steps {
         script {
-            def mysqlDeploymentExists = sh(script: "kubectl get deployment -n pre-prod mysql-db-preprod", returnStatus: true) == 0
+            def mysqlDeploymentExists = sh(script: "kubectl get deployment mysql-db-preprod -n pre-prod", returnStatus: true) == 0
             if (!mysqlDeploymentExists) {
+                // Only apply the deployment if it doesn't already exist
                 unstash 'source-code'
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
                     sh """
+                    # Configure AWS and update kubeconfig
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                    
+                    # Apply MySQL service and deployment manifests
                     kubectl apply -f k8s/mysql-service.yaml -n pre-prod
                     kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
                     """
-                    // Set environment variables after the deployment
-                    sh """
-                    kubectl set env deployment/mysql-db-preprod \
-                        MYSQL_USER=${env.MYSQL_USER} \
-                        MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
-                        MYSQL_DATABASE=${env.MYSQL_DATABASE} \
-                        MYSQL_ROOT_PASSWORD=${env.MYSQL_ROOT_PASSWORD} \
-                        -n pre-prod
-                    """
                 }
+                echo "MySQL Deployment created successfully."
             } else {
-                echo "MySQL Deployment already exists."
+                echo "MySQL Deployment already exists. Skipping re-deployment."
             }
         }
     }
 }
-
-
         
         stage('Check MySQL Readiness') {
             steps {
