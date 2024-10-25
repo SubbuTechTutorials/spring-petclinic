@@ -239,7 +239,7 @@ stage('Retrieve MySQL Secrets') {
                     """
                     // Set environment variables after the deployment
                     sh """
-                    kubectl set env deployment/mysql-db-prod \
+                    kubectl set env deployment/mysql-db-preprod \
                         MYSQL_USER=${env.MYSQL_USER} \
                         MYSQL_PASSWORD=${env.MYSQL_PASSWORD} \
                         MYSQL_DATABASE=${env.MYSQL_DATABASE} \
