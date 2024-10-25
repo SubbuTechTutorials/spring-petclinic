@@ -69,6 +69,7 @@ pipeline {
                         }
                     }
                 }
+         
     
         stage('Run Unit Tests with JaCoCo') {
             steps {
@@ -229,7 +230,7 @@ stage('Functional Testing of Docker Image with MySQL') {
             // Check if both the Trivy scan report and Docker image scan report exist
             if (fileExists('trivy-scan-report.txt') && fileExists('docker-scan-report.txt')) {
                 emailext(
-                    to: 'nagaraju.kjkc@gmail.com, ssrmca07@gmail.com, kandlaguntaniranjanreddy1231@gmail.com',
+                    to: 'ssrmca07@gmail.com',
                     subject: "QA Reports: Trivy Scan Report & Docker Image Scan Report",
                     body: """
                         Hello,
@@ -267,6 +268,7 @@ stage('Functional Testing of Docker Image with MySQL') {
             }
         }
 
+    
 
     stage('Update Kubernetes Deployment') {
         steps {
@@ -282,6 +284,8 @@ stage('Functional Testing of Docker Image with MySQL') {
             }
         }
     }
+
+
 
 
         stage('Manual Approval') {
@@ -393,7 +397,8 @@ stage('Check MySQL Readiness') {
     }
 }
 
-stage('Check PetClinic Health') {
+    
+        stage('Check PetClinic Health') {
     steps {
         script {
             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
@@ -439,28 +444,37 @@ stage('Check PetClinic Health') {
     }
 }
 
-stage('Smoke Tests') {
+  stage('Smoke Tests') {
     steps {
         script {
-            // Fetch the Load Balancer DNS from the Kubernetes service in the 'qa' namespace
-            def loadBalancerDNS = sh(script: """
-                kubectl get svc petclinic-service-qa -n qa -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-            """, returnStdout: true).trim()
+            // Use AWS credentials to ensure proper access to Kubernetes resources
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                // Configure AWS CLI with the necessary region and cluster
+                sh """
+                aws configure set region ap-south-1
+                aws eks --region ap-south-1 update-kubeconfig --name devops-petclinicapp-dev-ap-south-1
+                """
 
-            if (loadBalancerDNS == "") {
-                error "Load Balancer DNS not found. Please check the petclinic-service-qa service in the qa namespace."
+                // Fetch the Load Balancer DNS from the Kubernetes service in the 'qa' namespace
+                def loadBalancerDNS = sh(script: """
+                    kubectl get svc petclinic-service-qa -n qa -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+                """, returnStdout: true).trim()
+
+                if (loadBalancerDNS == "") {
+                    error "Load Balancer DNS not found. Please check the petclinic-service-qa service in the qa namespace."
+                }
+
+                echo "Updating PUBLIC_IP_OR_DOMAIN in run-smoke-tests.sh with Load Balancer DNS: ${loadBalancerDNS}"
+
+                // Update the PUBLIC_IP_OR_DOMAIN in the run-smoke-tests.sh script
+                sh """
+                sed -i 's|PUBLIC_IP_OR_DOMAIN=.*|PUBLIC_IP_OR_DOMAIN="${loadBalancerDNS}"|' ./scripts/run-smoke-tests.sh
+                """
+
+                // Set execute permission and run the smoke test script
+                sh 'chmod +x ./scripts/run-smoke-tests.sh'
+                sh './scripts/run-smoke-tests.sh'
             }
-
-            echo "Updating PUBLIC_IP_OR_DOMAIN in run-smoke-tests.sh with Load Balancer DNS: ${loadBalancerDNS}"
-
-            // Update the PUBLIC_IP_OR_DOMAIN in the run-smoke-tests.sh script
-            sh """
-            sed -i 's|PUBLIC_IP_OR_DOMAIN=.*|PUBLIC_IP_OR_DOMAIN="${loadBalancerDNS}"|' ./scripts/run-smoke-tests.sh
-            """
-
-            // Set execute permission and run the smoke test script
-            sh 'chmod +x ./scripts/run-smoke-tests.sh'
-            sh './scripts/run-smoke-tests.sh'
         }
     }
 }
@@ -481,7 +495,6 @@ stage('Smoke Tests') {
     success {
         slackSend(channel: '#project-petclinic', color: 'good', message: """
         SUCCESS: Job '${env.JOB_NAME}' build #${currentBuild.number} succeeded.
-        Scan reports have been emailed to: nagaraju.kjkc@gmail.com, ssrmca07@gmail.com, kandlaguntaniranjanreddy1231@gmail.com.
         """)
     }
     failure {
