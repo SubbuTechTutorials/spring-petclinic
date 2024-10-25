@@ -104,7 +104,7 @@ pipeline {
             }
         }
         
-        stage('Scan Docker Image with Trivy') {
+stage('Scan Docker Image with Trivy') {
     steps {
         script {
             // Check if the Trivy DB cache exists
@@ -253,9 +253,6 @@ stage('Retrieve MySQL Secrets') {
         }
     }
 }
-
-
-
         
         stage('Check MySQL Readiness') {
             steps {
@@ -284,7 +281,7 @@ stage('Retrieve MySQL Secrets') {
             }
         }
         
-           stage('Deploy PetClinic to EKS') {
+stage('Deploy PetClinic to EKS') {
     steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
             script {
@@ -294,7 +291,9 @@ stage('Retrieve MySQL Secrets') {
                     // First-time deployment: apply both service and deployment
                     echo "Deploying PetClinic service and deployment for the first time."
                     unstash 'source-code'
-
+                     // Update the image in the petclinic-deployment.yaml file
+                    sh "sed -i 's|image: .*|image: ${env.DOCKER_IMAGE}|' k8s/petclinic-deployment.yaml"
+                    
                     // Configure AWS region and update kubeconfig for EKS
                     sh """
                     aws configure set region ${AWS_REGION_EKS}
