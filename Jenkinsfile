@@ -219,31 +219,35 @@ stage('Retrieve MySQL Secrets') {
     }
 }
 
-    stage('Deploy MySQL to EKS') {
+   stage('Deploy MySQL to EKS') {
     steps {
         script {
-            def mysqlDeploymentExists = sh(script: "kubectl get deployment mysql-db-preprod -n pre-prod", returnStatus: true) == 0
-            if (!mysqlDeploymentExists) {
-                // Only apply the deployment if it doesn't already exist
-                unstash 'source-code'
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                // Set AWS region and update kubeconfig to authenticate kubectl commands
+                sh """
+                aws configure set region ${AWS_REGION_EKS}
+                aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+                """
+
+                // Check if the MySQL deployment already exists
+                def mysqlDeploymentExists = sh(script: "kubectl get deployment mysql-db-preprod -n pre-prod", returnStatus: true) == 0
+                
+                if (!mysqlDeploymentExists) {
+                    // Only apply the deployment if it doesn't already exist
+                    unstash 'source-code'
                     sh """
-                    # Configure AWS and update kubeconfig
-                    aws configure set region ${AWS_REGION_EKS}
-                    aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    
-                    # Apply MySQL service and deployment manifests
-                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod --prune
-                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod --prune
+                    kubectl apply -f k8s/mysql-service.yaml -n pre-prod
+                    kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
                     """
+                    echo "MySQL Deployment created successfully."
+                } else {
+                    echo "MySQL Deployment already exists. Skipping re-deployment."
                 }
-                echo "MySQL Deployment created successfully."
-            } else {
-                echo "MySQL Deployment already exists. Skipping re-deployment."
             }
         }
     }
 }
+
         
         stage('Check MySQL Readiness') {
             steps {
