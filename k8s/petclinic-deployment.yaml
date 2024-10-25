@@ -41,4 +41,4 @@ spec:
           valueFrom:
             secretKeyRef:
               name: db-secrets-preprod
-              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
+              key: MYSQL_DATABASE 
