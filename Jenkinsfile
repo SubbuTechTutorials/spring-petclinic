@@ -103,27 +103,33 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Scan Docker Image with Trivy') {
-            steps {
-                script {
-                    def trivyDbExists = fileExists("${TRIVY_DB_CACHE}/db.lock")
-                    if (trivyDbExists) {
-                        echo 'Trivy DB exists, skipping update for Docker image scan...'
-                        sh """
-                        trivy image --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
-                        """
-                    } else {
-                        echo 'Trivy DB does not exist, downloading and scanning Docker image...'
-                        sh """
-                        trivy image ${env.DOCKER_IMAGE} > docker-scan-report.txt
-                        """
-                    }
-
-                    writeFile file: 'docker-scan-success', text: 'Docker image scan completed successfully'
+    steps {
+        script {
+            // Check if the Trivy DB cache exists
+            def trivyDbExists = fileExists("${TRIVY_DB_CACHE}/db.lock")
+            if (!trivyDbExists) {
+                echo 'Trivy DB does not exist, downloading it once...'
+                // Use GitHub PAT to download Trivy DB to avoid rate limits
+                withCredentials([string(credentialsId: "${TRIVY_PAT_CREDENTIALS_ID}", variable: 'GITHUB_PAT')]) {
+                    sh """
+                    export GITHUB_TOKEN=${GITHUB_PAT}
+                    trivy --cache-dir ${TRIVY_DB_CACHE} image --download-db-only
+                    """
                 }
             }
+
+            // Scan Docker image with Trivy using the existing or freshly downloaded DB
+            echo 'Scanning Docker image with Trivy...'
+            sh """
+            trivy --cache-dir ${TRIVY_DB_CACHE} image --skip-db-update ${env.DOCKER_IMAGE} > docker-scan-report.txt
+            """
+            writeFile file: 'docker-scan-success', text: 'Docker image scan completed successfully'
         }
+    }
+}
+
         
         stage('Send Reports via Email') {
             steps {
@@ -195,22 +201,24 @@ pipeline {
             }
         }
 
+stage('Retrieve MySQL Secrets') {
+    steps {
+        script {
+            // Fetch MySQL credentials from AWS Secrets Manager with AWS credentials
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-eks-credentials']]) {
+                def secret = sh(script: "aws secretsmanager get-secret-value --secret-id ${SECRET_NAME} --region ${AWS_REGION} --query SecretString --output text", returnStdout: true).trim()
 
-        stage('Retrieve MySQL Secrets') {
-            steps {
-                script {
-                    // Fetch MySQL credentials from AWS Secrets Manager
-                    def secret = sh(script: "aws secretsmanager get-secret-value --secret-id ${SECRET_NAME} --region ${AWS_REGION} --query SecretString --output text", returnStdout: true).trim()
-
-                    // Parse the JSON response to extract the values (requires Pipeline Utility Steps Plugin)
-                    def secretJson = readJSON text: secret
-                    env.MYSQL_USER = secretJson.MYSQL_USER
-                    env.MYSQL_PASSWORD = secretJson.MYSQL_PASSWORD
-                    env.MYSQL_DATABASE = secretJson.MYSQL_DATABASE
-                    env.MYSQL_ROOT_PASSWORD = secretJson.MYSQL_ROOT_PASSWORD
-                }
+                // Parse the JSON response to extract the values (requires Pipeline Utility Steps Plugin)
+                def secretJson = readJSON text: secret
+                env.MYSQL_USER = secretJson.MYSQL_USER
+                env.MYSQL_PASSWORD = secretJson.MYSQL_PASSWORD
+                env.MYSQL_DATABASE = secretJson.MYSQL_DATABASE
+                env.MYSQL_ROOT_PASSWORD = secretJson.MYSQL_ROOT_PASSWORD
             }
         }
+    }
+}
+
         
         stage('Deploy MySQL to EKS') {
     steps {
@@ -222,7 +230,6 @@ pipeline {
                     sh """
                     aws configure set region ${AWS_REGION_EKS}
                     aws eks --region ${AWS_REGION_EKS} update-kubeconfig --name ${EKS_CLUSTER_NAME}
-                    kubectl apply -f k8s/mysql-pvc.yaml -n pre-prod
                     kubectl apply -f k8s/mysql-service.yaml -n pre-prod
                     kubectl apply -f k8s/mysql-deployment.yaml -n pre-prod
                     """
