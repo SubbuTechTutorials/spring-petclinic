@@ -38,7 +38,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: db-secrets-preprod
-              key: MYSQL_DATABASE  # Updated to use the secret key instead of ConfigMap
+              key: MYSQL_DATABASE
         volumeMounts:
         - mountPath: /var/lib/mysql
           name: mysql-persistent-storage
@@ -46,4 +46,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-preprod  # Must match your PersistentVolumeClaim
+          claimName: mysql-pvc-preprod
