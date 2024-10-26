@@ -3,7 +3,7 @@
 echo "Running Smoke Tests..."
 
 # Use the public DNS or IP of your load balancer
-PUBLIC_IP_OR_DOMAIN="abeef2b5efecf47f48fd7141e3079c27-359075947.ap-south-1.elb.amazonaws.com"
+PUBLIC_IP_OR_DOMAIN="a7b36e2f7989e4c17b220e22af43962f-1285715503.ap-south-1.elb.amazonaws.com"
 APP_PORT=8081
 
 # Number of retries
