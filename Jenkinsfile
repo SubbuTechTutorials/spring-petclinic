@@ -322,7 +322,6 @@ stage('Retrieve MySQL Secrets') {
         }
     }
 }
-
         stage('Check PetClinic Health') {
             steps {
                 script {
